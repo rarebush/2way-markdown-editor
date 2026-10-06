@@ -37,6 +37,28 @@ Before opening the tool up to a wider range of users, revisit this limitation:
 - Add round-trip fixtures for standard Markdown, GFM, and representative custom syntax.
 - Preserve unsupported constructs as untouched source, or clearly report when a rich edit could change them.
 
+## Capturing caret diagnostics
+
+To investigate an unexpected caret jump, open the browser developer tools Console and run:
+
+```js
+window.draftDiagnostics.start()
+```
+
+Use the editor normally. As soon as you notice a jump, return to the Console and run:
+
+```js
+window.draftDiagnostics.mark()
+window.draftDiagnostics.stop()
+copy(window.draftDiagnostics.export())
+```
+
+Paste the copied JSON into a bug report or share it for debugging. `copy()` is a developer-tools Console helper, not an app function; if unavailable, run `window.draftDiagnostics.export()` and copy its returned string.
+
+Diagnostics are off by default and kept only in memory, with the latest 1,000 events retained. Reloading clears the report; starting again clears the previous session. Reports contain timestamps relative to recording start, selection positions, event types, content lengths, and document-replacement events. They exclude document text, names, identifiers, and typed characters, and are not uploaded automatically.
+
+Include which pane you were typing in, whether you were in a table, and what you did immediately before the jump. A `replace-all-before` / `replace-all-after` pair that changes selection without a pointer event would support the synchronization hypothesis; a jump without replacement would point to another editor interaction.
+
 ## Checks
 
 ```sh

@@ -5,13 +5,16 @@ import { Crepe } from "@milkdown/crepe";
 import { replaceAll } from "@milkdown/kit/utils";
 import { editorViewCtx } from "@milkdown/kit/core";
 import { withDirectCellEditing } from "./tableInteractions";
+import { editorDiagnostics } from "./editorDiagnostics";
+import { shouldReplaceRichDocument, type EditOrigin } from "./markdownSync";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
 type MarkdownSurfaceProps = {
   documentId: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, origin: EditOrigin) => void;
+  origin?: EditOrigin;
   view: "split" | "source" | "rendered";
 };
 
@@ -53,9 +56,29 @@ function labelTopBarControls(root: HTMLElement) {
     });
 }
 
+function replaceRichMarkdown(crepe: Crepe, markdown: string, reason: string) {
+  crepe.editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    editorDiagnostics.record("replace-all-before", {
+      reason,
+      length: markdown.length,
+      from: view.state.selection.from,
+      to: view.state.selection.to,
+      focused: view.hasFocus(),
+    });
+    replaceAll(markdown)(ctx);
+    editorDiagnostics.record("replace-all-after", {
+      from: view.state.selection.from,
+      to: view.state.selection.to,
+      focused: view.hasFocus(),
+    });
+  });
+}
+
 export function MarkdownSurface({
   documentId,
   value,
+  origin,
   onChange,
   view,
 }: MarkdownSurfaceProps) {
@@ -67,6 +90,7 @@ export function MarkdownSurface({
 
   useEffect(() => {
     valueRef.current = value;
+    editorDiagnostics.record("shared-markdown-update", { length: value.length });
   }, [value]);
 
   useEffect(() => {
@@ -75,6 +99,16 @@ export function MarkdownSurface({
 
   useEffect(() => {
     if (!rootRef.current) return;
+
+    const root = rootRef.current;
+    const recordInteraction = (event: Event) => {
+      editorDiagnostics.record(`preview-${event.type}`, {
+        inputType: event instanceof InputEvent ? event.inputType : null,
+        target: event.target instanceof Element ? event.target.tagName : null,
+      });
+    };
+    const eventTypes = ["pointerdown", "beforeinput", "input", "compositionstart", "compositionend", "focusin", "focusout"];
+    eventTypes.forEach((type) => root.addEventListener(type, recordInteraction, true));
 
     const crepe = new Crepe({
       root: rootRef.current,
@@ -88,8 +122,24 @@ export function MarkdownSurface({
     });
 
     crepe.on((listener) => {
-      listener.markdownUpdated((_ctx, markdown) => {
-        if (markdown !== valueRef.current) onChangeRef.current(markdown);
+      listener.selectionUpdated((ctx, selection) => {
+        if (!editorReadyRef.current) return;
+        editorDiagnostics.record("preview-selection", {
+          from: selection.from,
+          to: selection.to,
+          selectionType: selection.constructor.name,
+          focused: ctx.get(editorViewCtx).hasFocus(),
+        });
+      });
+      listener.markdownUpdated((ctx, markdown) => {
+        if (editorReadyRef.current) editorDiagnostics.record("rich-markdown-emitted", {
+          length: markdown.length,
+          matchesShared: markdown === valueRef.current,
+          matchesLive: markdown === crepe.getMarkdown(),
+          from: ctx.get(editorViewCtx).state.selection.from,
+          to: ctx.get(editorViewCtx).state.selection.to,
+        });
+        if (markdown !== valueRef.current) onChangeRef.current(markdown, "rich");
       });
     });
 
@@ -128,12 +178,13 @@ export function MarkdownSurface({
       }
       const latestValue = valueRef.current;
       if (crepe.getMarkdown() !== latestValue) {
-        crepe.editor.action(replaceAll(latestValue));
+        replaceRichMarkdown(crepe, latestValue, "initialization");
       }
     });
 
     return () => {
       disposed = true;
+      eventTypes.forEach((type) => root.removeEventListener(type, recordInteraction, true));
       topBarObserver?.disconnect();
       if (crepeRef.current === crepe) {
         crepeRef.current = null;
@@ -145,11 +196,18 @@ export function MarkdownSurface({
 
   useEffect(() => {
     const crepe = crepeRef.current;
-    if (!editorReadyRef.current || !crepe || crepe.getMarkdown() === value)
+    if (!editorReadyRef.current || !crepe)
       return;
 
-    crepe.editor.action(replaceAll(value));
-  }, [value]);
+    if (!shouldReplaceRichDocument(origin, value, crepe.getMarkdown())) {
+      editorDiagnostics.record("rich-replacement-skipped", {
+        richOrigin: origin === "rich",
+      });
+      return;
+    }
+
+    replaceRichMarkdown(crepe, value, "shared-value-effect");
+  }, [value, origin]);
 
   return (
     <div className={`editor-surfaces editor-surfaces--${view}`}>
@@ -166,7 +224,10 @@ export function MarkdownSurface({
           value={value}
           height="100%"
           extensions={[markdownLanguage()]}
-          onChange={onChange}
+          onChange={(markdown) => {
+            editorDiagnostics.record("source-markdown-emitted", { length: markdown.length });
+            onChange(markdown, "source");
+          }}
           basicSetup={{
             lineNumbers: true,
             foldGutter: true,

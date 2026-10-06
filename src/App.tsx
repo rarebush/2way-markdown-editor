@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { MarkdownSurface } from "./MarkdownSurface";
+import type { EditOrigin } from "./markdownSync";
 import {
   createDocument,
   deleteDocument,
@@ -59,6 +60,11 @@ const starterMarkdown = [
 function App() {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [activeId, setActiveId] = useState("");
+  const [lastEdit, setLastEdit] = useState<{
+    documentId: string;
+    content: string;
+    origin: EditOrigin;
+  } | null>(null);
   const [view, setView] = useState<ViewMode>("split");
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
@@ -114,7 +120,8 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [activeDocument, ready]);
 
-  function updateContent(content: string) {
+  function updateContent(content: string, origin: EditOrigin) {
+    setLastEdit({ documentId: activeId, content, origin });
     setSaveState("saving");
     setDocuments((current) =>
       current.map((document) =>
@@ -382,6 +389,8 @@ function App() {
           key={activeDocument.id}
           documentId={activeDocument.id}
           value={activeDocument.content}
+          origin={lastEdit?.documentId === activeDocument.id && lastEdit.content === activeDocument.content
+            ? lastEdit.origin : undefined}
           onChange={updateContent}
           view={view}
         />
