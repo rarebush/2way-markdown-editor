@@ -13,7 +13,12 @@ Open the local URL printed by Vite. The app starts in split view and saves multi
 
 ## GitHub Pages
 
-The site is configured for the repository Pages URL: <https://sallen-wiley.github.io/2way-markdown-editor/>. Pushes to `main` run the checks and build, then deploy `dist` through GitHub Actions. In the repository settings, set Pages to use GitHub Actions as its deployment source.
+This project is published from two public repositories:
+
+- Canonical: <https://github.com/sallen-wiley/2way-markdown-editor>, deployed at <https://sallen-wiley.github.io/2way-markdown-editor/>.
+- Mirror: <https://github.com/rarebush/2way-markdown-editor>, deployed at <https://rarebush.github.io/2way-markdown-editor/>.
+
+Each repository deploys its `main` branch to GitHub Pages through the same Actions workflow. Push changes to both repositories to keep the mirror synchronized.
 
 ## Views and editing
 
