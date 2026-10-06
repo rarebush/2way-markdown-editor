@@ -250,7 +250,7 @@
 }
 
 .document-heading {
-  width: min(100% - 64px, 1510px);
+  width: min(100% - 64px, 1800px);
   margin: 0 auto;
   display: flex;
   align-items: center;
@@ -319,7 +319,7 @@
 }
 
 .editor-surfaces {
-  width: min(100% - 64px, 1510px);
+  width: min(100% - 64px, 1800px);
   min-height: 580px;
   flex: 1 0 580px;
   display: grid;
@@ -353,12 +353,12 @@
 }
 
 .pane-heading {
-  height: 46px;
-  min-height: 46px;
+  height: 32px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 0 18px;
+  padding: 0 14px;
   border-bottom: 1px solid #e6ebe7;
   background: #fbfcfa;
 }
@@ -491,6 +491,11 @@
 .rich-editor-root .milkdown .milkdown-top-bar {
   border-bottom-color: #d9e2dc;
   background: #f8faf8;
+}
+
+.rich-editor-root .milkdown .milkdown-top-bar .top-bar-divider,
+.rich-editor-root .milkdown .milkdown-toolbar .divider {
+  background: #9caea2;
 }
 
 .rich-editor-root .milkdown .milkdown-top-bar .top-bar-item,
@@ -630,7 +635,7 @@
 }
 
 .workspace-footer {
-  width: min(100% - 64px, 1510px);
+  width: min(100% - 64px, 1800px);
   min-height: 46px;
   display: flex;
   align-items: center;
