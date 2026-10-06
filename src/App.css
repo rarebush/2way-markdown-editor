@@ -524,19 +524,29 @@
   fill: #315c45;
 }
 
-.rich-editor-root .milkdown .milkdown-toolbar {
+.rich-editor-root .milkdown .milkdown-toolbar,
+.rich-editor-root .milkdown .milkdown-table-block .cell-handle .button-group {
   border: 1px solid #d3ddd6;
   background: #fff;
   box-shadow: 0 5px 16px rgba(32, 54, 40, 0.14);
 }
 
-.rich-editor-root .milkdown .milkdown-toolbar .toolbar-item svg {
+.rich-editor-root .milkdown .milkdown-toolbar .toolbar-item svg,
+.rich-editor-root .milkdown .milkdown-table-block .cell-handle svg,
+.rich-editor-root .milkdown .milkdown-table-block .add-button svg {
   color: #53675b;
   fill: #53675b;
 }
 
-.rich-editor-root .milkdown .milkdown-toolbar .toolbar-item:hover {
+.rich-editor-root .milkdown .milkdown-toolbar .toolbar-item:hover,
+.rich-editor-root .milkdown .milkdown-table-block .button-group button:hover,
+.rich-editor-root .milkdown .milkdown-table-block .add-button:hover {
   background: #e8efea;
+}
+
+.rich-editor-root .milkdown .milkdown-table-block .cell-handle,
+.rich-editor-root .milkdown .milkdown-table-block .add-button {
+  color: #53675b;
 }
 
 .rich-editor-root .milkdown .milkdown-toolbar .toolbar-item.active svg {
@@ -545,7 +555,8 @@
 }
 
 .rich-editor-root .milkdown .milkdown-top-bar button:focus-visible,
-.rich-editor-root .milkdown .milkdown-toolbar button:focus-visible {
+.rich-editor-root .milkdown .milkdown-toolbar button:focus-visible,
+.rich-editor-root .milkdown .milkdown-table-block button:focus-visible {
   outline: 2px solid #789884;
   outline-offset: 1px;
 }
@@ -557,6 +568,10 @@
   padding: 31px clamp(25px, 4vw, 58px) 70px;
   font-size: 14px;
   line-height: 1.8;
+}
+
+.rich-editor-root .milkdown .ProseMirror-focused {
+  --prosemirror-virtual-cursor-color: #263630;
 }
 
 .rich-editor-root .milkdown h1,

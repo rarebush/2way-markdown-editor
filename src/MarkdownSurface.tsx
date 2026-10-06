@@ -3,6 +3,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { markdown as markdownLanguage } from "@codemirror/lang-markdown";
 import { Crepe } from "@milkdown/crepe";
 import { replaceAll } from "@milkdown/kit/utils";
+import { editorViewCtx } from "@milkdown/kit/core";
+import { withDirectCellEditing } from "./tableInteractions";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
@@ -101,6 +103,19 @@ export function MarkdownSurface({
 
       crepeRef.current = crepe;
       editorReadyRef.current = true;
+      crepe.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        view.someProp("nodeViews", (nodeViews) => {
+          if (!nodeViews.table) return false;
+          view.setProps({
+            nodeViews: {
+              ...view.props.nodeViews,
+              table: withDirectCellEditing(nodeViews.table),
+            },
+          });
+          return true;
+        });
+      });
       if (rootRef.current) {
         labelTopBarControls(rootRef.current);
         const topBar = rootRef.current.querySelector(".milkdown-top-bar");
