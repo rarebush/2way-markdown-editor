@@ -15,6 +15,9 @@ export function createRichEditor(root: HTMLElement, defaultValue: string) {
       [Crepe.Feature.ImageBlock]: false,
       [Crepe.Feature.CodeMirror]: false,
     },
+    featureConfigs: {
+      [Crepe.Feature.Cursor]: { virtual: false },
+    },
   });
 }
 

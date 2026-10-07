@@ -11,6 +11,19 @@
   --scrollbar-track: #edf1ed;
   --scrollbar-thumb: #9ca9a1;
   --scrollbar-thumb-hover: #6e8176;
+  --editor-text: #34433b;
+  --editor-muted: #607267;
+  --editor-heading: #263630;
+  --editor-link: #3c6655;
+  --editor-selection: #b8d7c7;
+  --editor-selection-inactive: #cdded4;
+  --editor-code-background: #f0f4f1;
+  --editor-border: #dce3de;
+  --editor-font-mono: "IBM Plex Mono", Consolas, monospace;
+  --editor-font-body: "DM Sans", sans-serif;
+  --editor-font-title: "Lora", Georgia, serif;
+  --editor-font-size: 14px;
+  --editor-line-height: 24px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -390,12 +403,9 @@
   width: 100%;
   height: 100%;
   flex: 1 1 auto;
-  color: #394840;
-  background: white;
-  font:
-    13px/1.75 "IBM Plex Mono",
-    Consolas,
-    monospace;
+  color: var(--editor-text);
+  background: var(--paper);
+  font: var(--editor-font-size) / var(--editor-line-height) var(--editor-font-mono);
 }
 
 .source-pane .cm-scroller {
@@ -446,7 +456,20 @@
 }
 
 .source-pane .cm-activeLine {
-  background: #f8faf8;
+  background: rgba(60, 102, 85, 0.04);
+}
+
+.source-pane .cm-editor > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--editor-selection-inactive);
+}
+
+.source-pane .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+  background: var(--editor-selection);
+}
+
+.source-pane .cm-editor .cm-cursor,
+.source-pane .cm-editor .cm-dropCursor {
+  border-left-color: var(--editor-link);
 }
 
 .source-pane .cm-focused {
@@ -455,7 +478,7 @@
 
 .source-pane .cm-content {
   padding: 19px 0 45px;
-  caret-color: var(--coral);
+  caret-color: var(--editor-link);
 }
 
 .source-pane .cm-line {
@@ -474,18 +497,22 @@
 }
 
 .rich-editor-root .milkdown {
-  --crepe-color-background: #fff;
-  --crepe-color-on-background: #263630;
-  --crepe-color-surface: #fff;
-  --crepe-color-on-surface: #263630;
-  --crepe-color-outline: #dce3de;
-  --crepe-color-primary: #3c6655;
+  --crepe-color-background: var(--paper);
+  --crepe-color-on-background: var(--editor-text);
+  --crepe-color-surface: var(--paper);
+  --crepe-color-on-surface: var(--editor-text);
+  --crepe-color-outline: var(--editor-border);
+  --crepe-color-primary: var(--editor-link);
   --crepe-color-on-primary: #fff;
-  --crepe-font-default: "DM Sans", sans-serif;
-  --crepe-font-title: "Lora", Georgia, serif;
+  --crepe-color-selected: var(--editor-selection);
+  --crepe-color-inline-code: var(--editor-text);
+  --crepe-color-inline-area: var(--editor-code-background);
+  --crepe-font-default: var(--editor-font-body);
+  --crepe-font-title: var(--editor-font-title);
+  --crepe-font-code: var(--editor-font-mono);
   min-height: 100%;
-  color: #34433b;
-  font-family: "DM Sans", sans-serif;
+  color: var(--editor-text);
+  font-family: var(--editor-font-body);
 }
 
 .rich-editor-root .milkdown .milkdown-top-bar {
@@ -566,40 +593,90 @@
   min-height: 480px;
   margin: 0 auto;
   padding: 31px clamp(25px, 4vw, 58px) 70px;
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-.rich-editor-root .milkdown .ProseMirror-focused {
-  --prosemirror-virtual-cursor-color: #263630;
+  font-size: var(--editor-font-size);
+  line-height: var(--editor-line-height);
+  caret-color: var(--editor-link);
 }
 
 .rich-editor-root .milkdown h1,
 .rich-editor-root .milkdown h2,
 .rich-editor-root .milkdown h3,
-.rich-editor-root .milkdown h4 {
-  color: #263630;
-  font-family: "Lora", Georgia, serif;
+.rich-editor-root .milkdown h4,
+.rich-editor-root .milkdown h5,
+.rich-editor-root .milkdown h6 {
+  margin: 24px 0 12px;
+  padding: 0;
+  color: var(--editor-heading);
+  font-family: var(--editor-font-title);
+  font-weight: 500;
+  line-height: 1.3;
   letter-spacing: 0;
 }
 
 .rich-editor-root .milkdown h1 {
-  margin-top: 0.45em;
-  font-size: 2em;
-  line-height: 1.3;
+  font-size: 28px;
 }
 
 .rich-editor-root .milkdown h2 {
-  margin-top: 1.65em;
-  font-size: 1.45em;
+  font-size: 24px;
 }
 
 .rich-editor-root .milkdown h3 {
-  font-size: 1.16em;
+  font-size: 20px;
+}
+
+.rich-editor-root .milkdown h4 {
+  font-size: 18px;
+}
+
+.rich-editor-root .milkdown h5 {
+  font-size: 16px;
+}
+
+.rich-editor-root .milkdown h6 {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rich-editor-root .milkdown .editor > :first-child {
+  margin-top: 0;
 }
 
 .rich-editor-root .milkdown p {
-  margin: 0.8em 0;
+  margin: 12px 0;
+  padding: 0;
+  line-height: var(--editor-line-height);
+}
+
+.rich-editor-root .milkdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  color: var(--editor-text);
+  background: var(--editor-code-background);
+  font-family: var(--editor-font-mono);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.rich-editor-root .milkdown .milkdown-list-item-block li .label-wrapper {
+  width: 24px;
+  height: var(--editor-line-height);
+  color: var(--editor-muted);
+}
+
+.rich-editor-root .milkdown .milkdown-list-item-block li .label-wrapper .label {
+  height: var(--editor-line-height);
+  padding: 0;
+}
+
+.rich-editor-root .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--editor-muted);
+}
+
+.rich-editor-root .milkdown .editor > ul,
+.rich-editor-root .milkdown .editor > ol,
+.rich-editor-root .milkdown .milkdown-table-block {
+  margin: 12px 0;
 }
 
 .rich-editor-root
@@ -613,40 +690,59 @@
 }
 
 .rich-editor-root .milkdown blockquote {
-  margin: 1.2em 0;
-  padding: 0.15em 0 0.15em 1.2em;
+  margin: 12px 0;
+  padding: 0 0 0 16px;
   border-left: 2px solid #8eae98;
-  color: #66756c;
+  color: var(--editor-muted);
+}
+
+.rich-editor-root .milkdown blockquote::before {
+  content: none;
+}
+
+.rich-editor-root .milkdown hr {
+  height: 1px;
+  margin: 24px 0;
+  padding: 0;
+  background-color: var(--editor-border);
 }
 
 .rich-editor-root .milkdown table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: var(--editor-font-size);
 }
 
 .rich-editor-root .milkdown th,
 .rich-editor-root .milkdown td {
   padding: 8px 10px;
-  border: 1px solid #e0e7e1;
+  border: 1px solid var(--editor-border);
 }
 
 .rich-editor-root .milkdown th {
-  color: #41564a;
+  color: var(--editor-heading);
   background: #f4f7f4;
   font-weight: 700;
 }
 
 .rich-editor-root .milkdown pre {
   overflow-x: auto;
+  margin: 12px 0;
   padding: 14px 16px;
-  border: 1px solid #e4e9e5;
+  border: 1px solid var(--editor-border);
   border-radius: 5px;
-  background: #f5f7f5;
-  font:
-    12px/1.7 "IBM Plex Mono",
-    Consolas,
-    monospace;
+  color: var(--editor-text);
+  background: var(--editor-code-background);
+  font: var(--editor-font-size) / var(--editor-line-height) var(--editor-font-mono);
+}
+
+.rich-editor-root .milkdown pre code {
+  display: block;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  white-space: pre;
 }
 
 .workspace-footer {

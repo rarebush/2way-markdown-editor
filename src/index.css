@@ -36,8 +36,8 @@ button {
 }
 
 ::selection {
-  color: #1f3328;
-  background: #d6e6da;
+  color: var(--editor-text, #1f3328);
+  background: var(--editor-selection, #d6e6da);
 }
 
 #root {

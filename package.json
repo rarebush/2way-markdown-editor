@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.13.0",
+    "@codemirror/streamparser": "^6.0.0",
+    "@lezer/highlight": "^1.2.5",
+    "@lezer/markdown": "^1.8.0",
     "@milkdown/crepe": "^7.22.2",
     "@uiw/react-codemirror": "^4.25.12",
     "idb": "^8.0.4",

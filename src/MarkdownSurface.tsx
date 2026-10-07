@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
-import { markdown as markdownLanguage } from "@codemirror/lang-markdown";
+import { sourceMarkdownExtensions } from "./sourceMarkdown";
 import { withDirectCellEditing } from "./tableInteractions";
 import { editorDiagnostics } from "./editorDiagnostics";
 import {
@@ -35,7 +35,6 @@ const topBarToolLabels = [
   "Horizontal rule",
 ];
 
-const markdownExtensions = [markdownLanguage()];
 const markdownBasicSetup = {
   lineNumbers: true,
   foldGutter: true,
@@ -268,7 +267,7 @@ export function MarkdownSurface({
         <CodeMirror
           value={value}
           height="100%"
-          extensions={markdownExtensions}
+          extensions={sourceMarkdownExtensions}
           onChange={handleSourceChange}
           basicSetup={markdownBasicSetup}
           aria-label="Markdown source"
