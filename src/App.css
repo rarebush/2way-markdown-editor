@@ -405,7 +405,8 @@
   flex: 1 1 auto;
   color: var(--editor-text);
   background: var(--paper);
-  font: var(--editor-font-size) / var(--editor-line-height) var(--editor-font-mono);
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-mono);
 }
 
 .source-pane .cm-scroller {
@@ -459,11 +460,19 @@
   background: rgba(60, 102, 85, 0.04);
 }
 
-.source-pane .cm-editor > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+.source-pane
+  .cm-editor
+  > .cm-scroller
+  > .cm-selectionLayer
+  .cm-selectionBackground {
   background: var(--editor-selection-inactive);
 }
 
-.source-pane .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+.source-pane
+  .cm-editor.cm-focused
+  > .cm-scroller
+  > .cm-selectionLayer
+  .cm-selectionBackground {
   background: var(--editor-selection);
 }
 
@@ -733,7 +742,8 @@
   border-radius: 5px;
   color: var(--editor-text);
   background: var(--editor-code-background);
-  font: var(--editor-font-size) / var(--editor-line-height) var(--editor-font-mono);
+  font: var(--editor-font-size) / var(--editor-line-height)
+    var(--editor-font-mono);
 }
 
 .rich-editor-root .milkdown pre code {

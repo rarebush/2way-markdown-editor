@@ -34,11 +34,14 @@ describe("source Markdown styling", () => {
       },
     );
 
-    const strikeClass = sourceMarkdownHighlightStyle.style([tags.strikethrough]);
+    const strikeClass = sourceMarkdownHighlightStyle.style([
+      tags.strikethrough,
+    ]);
     expect(strikeClass).toBeTruthy();
     expect(
       highlighted.some(
-        (token) => token.text.includes("removed") && token.classes === strikeClass,
+        (token) =>
+          token.text.includes("removed") && token.classes === strikeClass,
       ),
     ).toBe(true);
   });
