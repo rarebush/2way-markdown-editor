@@ -42,15 +42,15 @@ Before opening the tool up to a wider range of users, revisit this limitation:
 To investigate an unexpected caret jump, open the browser developer tools Console and run:
 
 ```js
-window.draftDiagnostics.start()
+window.draftDiagnostics.start();
 ```
 
 Use the editor normally. As soon as you notice a jump, return to the Console and run:
 
 ```js
-window.draftDiagnostics.mark()
-window.draftDiagnostics.stop()
-copy(window.draftDiagnostics.export())
+window.draftDiagnostics.mark();
+window.draftDiagnostics.stop();
+copy(window.draftDiagnostics.export());
 ```
 
 Paste the copied JSON into a bug report or share it for debugging. `copy()` is a developer-tools Console helper, not an app function; if unavailable, run `window.draftDiagnostics.export()` and copy its returned string.

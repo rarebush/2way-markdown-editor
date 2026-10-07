@@ -90,7 +90,9 @@ export function MarkdownSurface({
 
   useEffect(() => {
     valueRef.current = value;
-    editorDiagnostics.record("shared-markdown-update", { length: value.length });
+    editorDiagnostics.record("shared-markdown-update", {
+      length: value.length,
+    });
   }, [value]);
 
   useEffect(() => {
@@ -107,8 +109,18 @@ export function MarkdownSurface({
         target: event.target instanceof Element ? event.target.tagName : null,
       });
     };
-    const eventTypes = ["pointerdown", "beforeinput", "input", "compositionstart", "compositionend", "focusin", "focusout"];
-    eventTypes.forEach((type) => root.addEventListener(type, recordInteraction, true));
+    const eventTypes = [
+      "pointerdown",
+      "beforeinput",
+      "input",
+      "compositionstart",
+      "compositionend",
+      "focusin",
+      "focusout",
+    ];
+    eventTypes.forEach((type) =>
+      root.addEventListener(type, recordInteraction, true),
+    );
 
     const crepe = new Crepe({
       root: rootRef.current,
@@ -132,14 +144,16 @@ export function MarkdownSurface({
         });
       });
       listener.markdownUpdated((ctx, markdown) => {
-        if (editorReadyRef.current) editorDiagnostics.record("rich-markdown-emitted", {
-          length: markdown.length,
-          matchesShared: markdown === valueRef.current,
-          matchesLive: markdown === crepe.getMarkdown(),
-          from: ctx.get(editorViewCtx).state.selection.from,
-          to: ctx.get(editorViewCtx).state.selection.to,
-        });
-        if (markdown !== valueRef.current) onChangeRef.current(markdown, "rich");
+        if (editorReadyRef.current)
+          editorDiagnostics.record("rich-markdown-emitted", {
+            length: markdown.length,
+            matchesShared: markdown === valueRef.current,
+            matchesLive: markdown === crepe.getMarkdown(),
+            from: ctx.get(editorViewCtx).state.selection.from,
+            to: ctx.get(editorViewCtx).state.selection.to,
+          });
+        if (markdown !== valueRef.current)
+          onChangeRef.current(markdown, "rich");
       });
     });
 
@@ -184,7 +198,9 @@ export function MarkdownSurface({
 
     return () => {
       disposed = true;
-      eventTypes.forEach((type) => root.removeEventListener(type, recordInteraction, true));
+      eventTypes.forEach((type) =>
+        root.removeEventListener(type, recordInteraction, true),
+      );
       topBarObserver?.disconnect();
       if (crepeRef.current === crepe) {
         crepeRef.current = null;
@@ -196,8 +212,7 @@ export function MarkdownSurface({
 
   useEffect(() => {
     const crepe = crepeRef.current;
-    if (!editorReadyRef.current || !crepe)
-      return;
+    if (!editorReadyRef.current || !crepe) return;
 
     if (!shouldReplaceRichDocument(origin, value, crepe.getMarkdown())) {
       editorDiagnostics.record("rich-replacement-skipped", {
@@ -225,7 +240,9 @@ export function MarkdownSurface({
           height="100%"
           extensions={[markdownLanguage()]}
           onChange={(markdown) => {
-            editorDiagnostics.record("source-markdown-emitted", { length: markdown.length });
+            editorDiagnostics.record("source-markdown-emitted", {
+              length: markdown.length,
+            });
             onChange(markdown, "source");
           }}
           basicSetup={{

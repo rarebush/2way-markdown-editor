@@ -12,9 +12,9 @@ describe("editor diagnostics", () => {
     diagnostics.record("after-stop");
     const report = JSON.parse(diagnostics.export());
     expect(report.enabled).toBe(false);
-    expect(report.events.map((entry: { event: string }) => entry.event)).toEqual([
-      "selection", "user-reported-caret-jump",
-    ]);
+    expect(
+      report.events.map((entry: { event: string }) => entry.event),
+    ).toEqual(["selection", "user-reported-caret-jump"]);
     expect(report.events[0].details).toEqual({ from: 10, to: 10 });
   });
 
@@ -26,8 +26,13 @@ describe("editor diagnostics", () => {
     diagnostics.record("third");
     const report = JSON.parse(diagnostics.export());
     expect(report.droppedEvents).toBe(1);
-    expect(report.events.map((entry: { event: string }) => entry.event)).toEqual(["second", "third"]);
+    expect(
+      report.events.map((entry: { event: string }) => entry.event),
+    ).toEqual(["second", "third"]);
     diagnostics.start();
-    expect(JSON.parse(diagnostics.export())).toMatchObject({ events: [], droppedEvents: 0 });
+    expect(JSON.parse(diagnostics.export())).toMatchObject({
+      events: [],
+      droppedEvents: 0,
+    });
   });
 });

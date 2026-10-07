@@ -1,8 +1,16 @@
 import type { NodeViewConstructor } from "@milkdown/kit/prose/view";
 
-export function withDirectCellEditing(createNodeView: NodeViewConstructor): NodeViewConstructor {
+export function withDirectCellEditing(
+  createNodeView: NodeViewConstructor,
+): NodeViewConstructor {
   return (node, view, getPos, decorations, innerDecorations) => {
-    const nodeView = createNodeView(node, view, getPos, decorations, innerDecorations);
+    const nodeView = createNodeView(
+      node,
+      view,
+      getPos,
+      decorations,
+      innerDecorations,
+    );
     const originalStopEvent = nodeView.stopEvent?.bind(nodeView);
 
     nodeView.stopEvent = (event) => {
@@ -11,7 +19,10 @@ export function withDirectCellEditing(createNodeView: NodeViewConstructor): Node
         (event.type === "mousedown" || event.type === "pointerdown") &&
         event instanceof MouseEvent &&
         event.button === 0 &&
-        !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
         event.target instanceof Element &&
         !event.target.closest("button") &&
         event.target.closest("td, th") &&

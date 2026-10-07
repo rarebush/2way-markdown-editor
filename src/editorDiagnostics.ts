@@ -24,14 +24,22 @@ export function createEditorDiagnostics(limit = 1000) {
     },
     record(event: string, details: DiagnosticEvent["details"] = {}) {
       if (!enabled) return;
-      events.push({ elapsedMs: Math.round(performance.now() - startedAt), event, details });
+      events.push({
+        elapsedMs: Math.round(performance.now() - startedAt),
+        event,
+        details,
+      });
       if (events.length > limit) {
         events.shift();
         droppedEvents += 1;
       }
     },
     export() {
-      return JSON.stringify({ version: 1, enabled, droppedEvents, events }, null, 2);
+      return JSON.stringify(
+        { version: 1, enabled, droppedEvents, events },
+        null,
+        2,
+      );
     },
     mark() {
       this.record("user-reported-caret-jump");

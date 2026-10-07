@@ -389,8 +389,12 @@ function App() {
           key={activeDocument.id}
           documentId={activeDocument.id}
           value={activeDocument.content}
-          origin={lastEdit?.documentId === activeDocument.id && lastEdit.content === activeDocument.content
-            ? lastEdit.origin : undefined}
+          origin={
+            lastEdit?.documentId === activeDocument.id &&
+            lastEdit.content === activeDocument.content
+              ? lastEdit.origin
+              : undefined
+          }
           onChange={updateContent}
           view={view}
         />
