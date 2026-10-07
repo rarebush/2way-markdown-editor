@@ -7,3 +7,10 @@ export function shouldReplaceRichDocument(
 ) {
   return origin !== "rich" && sharedMarkdown !== liveMarkdown;
 }
+
+export function isProgrammaticRichEcho(
+  emittedMarkdown: string,
+  expectedMarkdown: string | null,
+) {
+  return expectedMarkdown !== null && emittedMarkdown === expectedMarkdown;
+}

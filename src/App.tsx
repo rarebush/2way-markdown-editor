@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { MarkdownSurface } from "./MarkdownSurface";
 import type { EditOrigin } from "./markdownSync";
+import { createDocumentSaveScheduler } from "./documentSaveScheduler";
 import {
   createDocument,
   deleteDocument,
@@ -65,6 +66,11 @@ function App() {
     content: string;
     origin: EditOrigin;
   } | null>(null);
+  const [saveScheduler] = useState(() =>
+    createDocumentSaveScheduler(saveDocument, 350),
+  );
+  const activeIdRef = useRef(activeId);
+  const mountedRef = useRef(false);
   const [view, setView] = useState<ViewMode>("split");
   const [ready, setReady] = useState(false);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error">(
@@ -76,6 +82,18 @@ function App() {
   const importRef = useRef<HTMLInputElement>(null);
 
   const activeDocument = documents.find((document) => document.id === activeId);
+
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      void saveScheduler.flushAll();
+    };
+  }, [saveScheduler]);
 
   useEffect(() => {
     let mounted = true;
@@ -111,14 +129,20 @@ function App() {
   useEffect(() => {
     if (!ready || !activeDocument) return;
 
-    const timeoutId = window.setTimeout(() => {
-      void saveDocument(activeDocument)
-        .then(() => setSaveState("saved"))
-        .catch(() => setSaveState("error"));
-    }, 350);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [activeDocument, ready]);
+    const documentId = activeDocument.id;
+    saveScheduler.schedule(activeDocument, {
+      onSaved: () => {
+        if (mountedRef.current && activeIdRef.current === documentId) {
+          setSaveState("saved");
+        }
+      },
+      onError: () => {
+        if (mountedRef.current && activeIdRef.current === documentId) {
+          setSaveState("error");
+        }
+      },
+    });
+  }, [activeDocument, ready, saveScheduler]);
 
   function updateContent(content: string, origin: EditOrigin) {
     setLastEdit({ documentId: activeId, content, origin });
@@ -169,6 +193,7 @@ function App() {
   async function removeActiveDocument() {
     if (!activeDocument) return;
     setSaveState("saving");
+    await saveScheduler.cancel(activeDocument.id);
     await deleteDocument(activeDocument.id);
     const remaining = documents.filter(
       (document) => document.id !== activeDocument.id,

@@ -1,12 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { markdown as markdownLanguage } from "@codemirror/lang-markdown";
-import { Crepe } from "@milkdown/crepe";
-import { replaceAll } from "@milkdown/kit/utils";
-import { editorViewCtx } from "@milkdown/kit/core";
 import { withDirectCellEditing } from "./tableInteractions";
 import { editorDiagnostics } from "./editorDiagnostics";
-import { shouldReplaceRichDocument, type EditOrigin } from "./markdownSync";
+import {
+  isProgrammaticRichEcho,
+  shouldReplaceRichDocument,
+  type EditOrigin,
+} from "./markdownSync";
+import type { RichEditor } from "./richEditorRuntime";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
@@ -33,6 +35,14 @@ const topBarToolLabels = [
   "Horizontal rule",
 ];
 
+const markdownExtensions = [markdownLanguage()];
+const markdownBasicSetup = {
+  lineNumbers: true,
+  foldGutter: true,
+  highlightActiveLine: true,
+  autocompletion: false,
+};
+
 function labelTopBarControls(root: HTMLElement) {
   const topBar = root.querySelector<HTMLElement>(".milkdown-top-bar");
   if (!topBar) return;
@@ -56,25 +66,6 @@ function labelTopBarControls(root: HTMLElement) {
     });
 }
 
-function replaceRichMarkdown(crepe: Crepe, markdown: string, reason: string) {
-  crepe.editor.action((ctx) => {
-    const view = ctx.get(editorViewCtx);
-    editorDiagnostics.record("replace-all-before", {
-      reason,
-      length: markdown.length,
-      from: view.state.selection.from,
-      to: view.state.selection.to,
-      focused: view.hasFocus(),
-    });
-    replaceAll(markdown)(ctx);
-    editorDiagnostics.record("replace-all-after", {
-      from: view.state.selection.from,
-      to: view.state.selection.to,
-      focused: view.hasFocus(),
-    });
-  });
-}
-
 export function MarkdownSurface({
   documentId,
   value,
@@ -83,16 +74,28 @@ export function MarkdownSurface({
   view,
 }: MarkdownSurfaceProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const crepeRef = useRef<Crepe | null>(null);
+  const crepeRef = useRef<RichEditor | null>(null);
+  const runtimeRef = useRef<typeof import("./richEditorRuntime") | null>(null);
   const editorReadyRef = useRef(false);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  const expectedRichEchoRef = useRef<string | null>(null);
+  const handleSourceChange = useCallback((markdown: string) => {
+    if (editorDiagnostics.isEnabled()) {
+      editorDiagnostics.record("source-markdown-emitted", {
+        length: markdown.length,
+      });
+    }
+    onChangeRef.current(markdown, "source");
+  }, []);
 
   useEffect(() => {
     valueRef.current = value;
-    editorDiagnostics.record("shared-markdown-update", {
-      length: value.length,
-    });
+    if (editorDiagnostics.isEnabled()) {
+      editorDiagnostics.record("shared-markdown-update", {
+        length: value.length,
+      });
+    }
   }, [value]);
 
   useEffect(() => {
@@ -104,6 +107,7 @@ export function MarkdownSurface({
 
     const root = rootRef.current;
     const recordInteraction = (event: Event) => {
+      if (!editorDiagnostics.isEnabled()) return;
       editorDiagnostics.record(`preview-${event.type}`, {
         inputType: event instanceof InputEvent ? event.inputType : null,
         target: event.target instanceof Element ? event.target.tagName : null,
@@ -122,44 +126,49 @@ export function MarkdownSurface({
       root.addEventListener(type, recordInteraction, true),
     );
 
-    const crepe = new Crepe({
-      root: rootRef.current,
-      defaultValue: valueRef.current,
-      features: {
-        [Crepe.Feature.TopBar]: true,
-        [Crepe.Feature.Latex]: false,
-        [Crepe.Feature.ImageBlock]: false,
-        [Crepe.Feature.CodeMirror]: false,
-      },
-    });
-
-    crepe.on((listener) => {
-      listener.selectionUpdated((ctx, selection) => {
-        if (!editorReadyRef.current) return;
-        editorDiagnostics.record("preview-selection", {
-          from: selection.from,
-          to: selection.to,
-          selectionType: selection.constructor.name,
-          focused: ctx.get(editorViewCtx).hasFocus(),
-        });
-      });
-      listener.markdownUpdated((ctx, markdown) => {
-        if (editorReadyRef.current)
-          editorDiagnostics.record("rich-markdown-emitted", {
-            length: markdown.length,
-            matchesShared: markdown === valueRef.current,
-            matchesLive: markdown === crepe.getMarkdown(),
-            from: ctx.get(editorViewCtx).state.selection.from,
-            to: ctx.get(editorViewCtx).state.selection.to,
-          });
-        if (markdown !== valueRef.current)
-          onChangeRef.current(markdown, "rich");
-      });
-    });
-
+    let crepe: RichEditor | null = null;
     let disposed = false;
     let topBarObserver: MutationObserver | null = null;
-    void crepe.create().then(() => {
+    void import("./richEditorRuntime").then(async (runtime) => {
+      if (disposed || !rootRef.current) return;
+      runtimeRef.current = runtime;
+      crepe = runtime.createRichEditor(rootRef.current, valueRef.current);
+
+      crepe.on((listener) => {
+        listener.selectionUpdated((ctx, selection) => {
+          if (!editorReadyRef.current || !editorDiagnostics.isEnabled()) return;
+          editorDiagnostics.record("preview-selection", {
+            from: selection.from,
+            to: selection.to,
+            selectionType: selection.constructor.name,
+            focused: ctx.get(runtime.editorViewCtx).hasFocus(),
+          });
+        });
+        listener.markdownUpdated((ctx, markdown) => {
+          const expectedEcho = expectedRichEchoRef.current;
+          expectedRichEchoRef.current = null;
+          if (isProgrammaticRichEcho(markdown, expectedEcho)) {
+            if (editorDiagnostics.isEnabled()) {
+              editorDiagnostics.record("source-preview-echo-ignored", {
+                length: markdown.length,
+              });
+            }
+            return;
+          }
+          if (editorReadyRef.current && editorDiagnostics.isEnabled())
+            editorDiagnostics.record("rich-markdown-emitted", {
+              length: markdown.length,
+              matchesShared: markdown === valueRef.current,
+              matchesLive: markdown === crepe?.getMarkdown(),
+              from: ctx.get(runtime.editorViewCtx).state.selection.from,
+              to: ctx.get(runtime.editorViewCtx).state.selection.to,
+            });
+          if (markdown !== valueRef.current)
+            onChangeRef.current(markdown, "rich");
+        });
+      });
+
+      await crepe.create();
       if (disposed) {
         void crepe.destroy();
         return;
@@ -168,7 +177,7 @@ export function MarkdownSurface({
       crepeRef.current = crepe;
       editorReadyRef.current = true;
       crepe.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx);
+        const view = ctx.get(runtime.editorViewCtx);
         view.someProp("nodeViews", (nodeViews) => {
           if (!nodeViews.table) return false;
           view.setProps({
@@ -192,7 +201,11 @@ export function MarkdownSurface({
       }
       const latestValue = valueRef.current;
       if (crepe.getMarkdown() !== latestValue) {
-        replaceRichMarkdown(crepe, latestValue, "initialization");
+        expectedRichEchoRef.current = runtime.replaceRichMarkdown(
+          crepe,
+          latestValue,
+          "initialization",
+        );
       }
     });
 
@@ -202,8 +215,9 @@ export function MarkdownSurface({
         root.removeEventListener(type, recordInteraction, true),
       );
       topBarObserver?.disconnect();
-      if (crepeRef.current === crepe) {
+      if (crepe && crepeRef.current === crepe) {
         crepeRef.current = null;
+        runtimeRef.current = null;
         editorReadyRef.current = false;
         void crepe.destroy();
       }
@@ -214,14 +228,30 @@ export function MarkdownSurface({
     const crepe = crepeRef.current;
     if (!editorReadyRef.current || !crepe) return;
 
-    if (!shouldReplaceRichDocument(origin, value, crepe.getMarkdown())) {
-      editorDiagnostics.record("rich-replacement-skipped", {
-        richOrigin: origin === "rich",
-      });
+    if (origin === "rich") {
+      if (editorDiagnostics.isEnabled()) {
+        editorDiagnostics.record("rich-replacement-skipped", {
+          richOrigin: true,
+        });
+      }
       return;
     }
 
-    replaceRichMarkdown(crepe, value, "shared-value-effect");
+    const timeoutId = window.setTimeout(() => {
+      if (!editorReadyRef.current || crepeRef.current !== crepe) return;
+      if (!shouldReplaceRichDocument(origin, value, crepe.getMarkdown()))
+        return;
+
+      const expectedEcho = runtimeRef.current?.replaceRichMarkdown(
+        crepe,
+        value,
+        "shared-value-effect",
+      );
+      if (expectedEcho !== undefined)
+        expectedRichEchoRef.current = expectedEcho;
+    }, 50);
+
+    return () => window.clearTimeout(timeoutId);
   }, [value, origin]);
 
   return (
@@ -238,19 +268,9 @@ export function MarkdownSurface({
         <CodeMirror
           value={value}
           height="100%"
-          extensions={[markdownLanguage()]}
-          onChange={(markdown) => {
-            editorDiagnostics.record("source-markdown-emitted", {
-              length: markdown.length,
-            });
-            onChange(markdown, "source");
-          }}
-          basicSetup={{
-            lineNumbers: true,
-            foldGutter: true,
-            highlightActiveLine: true,
-            autocompletion: false,
-          }}
+          extensions={markdownExtensions}
+          onChange={handleSourceChange}
+          basicSetup={markdownBasicSetup}
           aria-label="Markdown source"
         />
       </section>

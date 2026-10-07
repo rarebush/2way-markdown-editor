@@ -5,14 +5,19 @@ type DiagnosticEvent = {
 };
 
 export function createEditorDiagnostics(limit = 1000) {
+  const capacity = Math.max(1, Math.floor(limit));
   let enabled = false;
   let startedAt = 0;
-  let events: DiagnosticEvent[] = [];
+  let events: Array<DiagnosticEvent | undefined> = Array(capacity);
+  let eventCount = 0;
+  let nextEventIndex = 0;
   let droppedEvents = 0;
 
   return {
     start() {
-      events = [];
+      events = Array(capacity);
+      eventCount = 0;
+      nextEventIndex = 0;
       droppedEvents = 0;
       startedAt = performance.now();
       enabled = true;
@@ -22,21 +27,31 @@ export function createEditorDiagnostics(limit = 1000) {
       enabled = false;
       return "Editor diagnostics stopped.";
     },
+    isEnabled() {
+      return enabled;
+    },
     record(event: string, details: DiagnosticEvent["details"] = {}) {
       if (!enabled) return;
-      events.push({
+      events[nextEventIndex] = {
         elapsedMs: Math.round(performance.now() - startedAt),
         event,
         details,
-      });
-      if (events.length > limit) {
-        events.shift();
+      };
+      nextEventIndex = (nextEventIndex + 1) % capacity;
+      if (eventCount < capacity) {
+        eventCount += 1;
+      } else {
         droppedEvents += 1;
       }
     },
     export() {
+      const startIndex = eventCount === capacity ? nextEventIndex : 0;
+      const chronologicalEvents = Array.from(
+        { length: eventCount },
+        (_, index) => events[(startIndex + index) % capacity]!,
+      );
       return JSON.stringify(
-        { version: 1, enabled, droppedEvents, events },
+        { version: 1, enabled, droppedEvents, events: chronologicalEvents },
         null,
         2,
       );

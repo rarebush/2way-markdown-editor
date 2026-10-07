@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { shouldReplaceRichDocument } from "./markdownSync";
+import {
+  isProgrammaticRichEcho,
+  shouldReplaceRichDocument,
+} from "./markdownSync";
 
 describe("Markdown edit origin", () => {
+  it("identifies a matching serialization echo from a source replacement", () => {
+    expect(
+      isProgrammaticRichEcho(
+        "canonical preview Markdown",
+        "canonical preview Markdown",
+      ),
+    ).toBe(true);
+    expect(
+      isProgrammaticRichEcho("new rich edit", "canonical preview Markdown"),
+    ).toBe(false);
+    expect(isProgrammaticRichEcho("any rich edit", null)).toBe(false);
+  });
+
   it("does not replace newer rich typing with an older rich snapshot", () => {
     const emittedSnapshot = "Text at position 403";
     const liveAfterNextKeystroke = `${emittedSnapshot}!`;

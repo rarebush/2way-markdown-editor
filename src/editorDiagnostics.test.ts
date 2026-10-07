@@ -11,6 +11,7 @@ describe("editor diagnostics", () => {
     diagnostics.stop();
     diagnostics.record("after-stop");
     const report = JSON.parse(diagnostics.export());
+    expect(diagnostics.isEnabled()).toBe(false);
     expect(report.enabled).toBe(false);
     expect(
       report.events.map((entry: { event: string }) => entry.event),
@@ -21,6 +22,7 @@ describe("editor diagnostics", () => {
   it("limits retained events and resets on a new session", () => {
     const diagnostics = createEditorDiagnostics(2);
     diagnostics.start();
+    expect(diagnostics.isEnabled()).toBe(true);
     diagnostics.record("first");
     diagnostics.record("second");
     diagnostics.record("third");
