@@ -25,9 +25,11 @@ export function createDocumentSaveScheduler(
     ).then(() => save(document));
     inFlight.set(document.id, write);
 
-    void write.then(callbacks.onSaved, callbacks.onError).finally(() => {
-      if (inFlight.get(document.id) === write) inFlight.delete(document.id);
-    });
+    void write
+      .then(callbacks.onSaved, () => callbacks.onError?.())
+      .finally(() => {
+        if (inFlight.get(document.id) === write) inFlight.delete(document.id);
+      });
 
     return write;
   }

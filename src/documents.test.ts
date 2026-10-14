@@ -5,6 +5,8 @@ import {
   deleteDocument,
   listDocuments,
   saveDocument,
+  documentRepository,
+  type GitHubOrigin,
   type WorkspaceDocument,
 } from "./documents";
 
@@ -15,6 +17,73 @@ afterEach(async () => {
 });
 
 describe("browser document storage", () => {
+  const origin: GitHubOrigin = {
+    repositoryId: 1,
+    owner: "writer",
+    repo: "notes",
+    branch: "main",
+    path: "notes.md",
+    blobSha: "blob",
+    commitSha: "commit",
+    baseContent: "Original\r\n",
+    mode: "100644",
+  };
+
+  it("persists repository membership independently of a remote file link", async () => {
+    const repository = {
+      repositoryId: origin.repositoryId,
+      owner: origin.owner,
+      repo: origin.repo,
+      branch: origin.branch,
+    };
+    const document = {
+      ...createDocument("Retained repo copy", "Local working content"),
+      repository,
+      repositoryPath: "drafts/retained.md",
+    };
+    documentIds.push(document.id);
+    await saveDocument(document);
+    const stored = (await listDocuments()).find(
+      (item) => item.id === document.id,
+    )!;
+    expect(documentRepository(stored)).toEqual(repository);
+    expect(stored.repositoryPath).toBe("drafts/retained.md");
+    expect(stored.github).toBeUndefined();
+    expect(documentRepository(createDocument("Local", ""))).toBeUndefined();
+    expect(
+      documentRepository({
+        ...createDocument("Legacy repo", ""),
+        github: origin,
+      }),
+    ).toBe(origin);
+  });
+
+  it("persists GitHub origins and pending commit recovery with local edits", async () => {
+    const document = {
+      ...createDocument("Notes", "New local edits"),
+      github: origin,
+      githubPending: {
+        candidateSha: "candidate",
+        previousHead: "commit",
+        origin,
+        operation: "update" as const,
+      },
+    };
+    documentIds.push(document.id);
+    await saveDocument(document);
+    await expect(listDocuments()).resolves.toContainEqual(document);
+  });
+
+  it("keeps valid drafts when optional GitHub metadata is malformed", async () => {
+    const document = createDocument("Local", "Keep this");
+    documentIds.push(document.id);
+    await saveDocument({
+      ...document,
+      github: { token: "do-not-load" },
+    } as unknown as WorkspaceDocument);
+    await expect(listDocuments()).resolves.toContainEqual(document);
+  });
+
   it("creates and persists a named Markdown document", async () => {
     const document = createDocument("Meeting notes", "# Decisions\n");
     documentIds.push(document.id);

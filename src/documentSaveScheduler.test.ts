@@ -9,6 +9,20 @@ function createTestDocument(name: string, content: string): WorkspaceDocument {
 }
 
 describe("per-document save scheduling", () => {
+  it("reports explicit flush failures without an unhandled callback rejection and permits retry", async () => {
+    const save = vi
+      .fn<(document: WorkspaceDocument) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Storage full"))
+      .mockResolvedValue(undefined);
+    const scheduler = createDocumentSaveScheduler(save);
+    const document = createTestDocument("Notes", "Draft");
+    scheduler.schedule(document);
+    await expect(scheduler.flushAll()).rejects.toThrow("Storage full");
+    scheduler.schedule({ ...document, content: "Retained draft" });
+    await scheduler.flushAll();
+    expect(save).toHaveBeenCalledTimes(2);
+  });
+
   it("saves a pending document after switching to another document", async () => {
     vi.useFakeTimers();
     const save = vi
