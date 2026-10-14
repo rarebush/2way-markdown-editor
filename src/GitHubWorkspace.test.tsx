@@ -516,6 +516,82 @@ describe("GitHub workspace", () => {
     );
   });
 
+  it("clears cancelled actions before opening another file workflow or settings", async () => {
+    const state = renderLinkedDocument();
+    const user = await connect();
+    await user.click(screen.getByRole("button", { name: "Close GitHub" }));
+    await user.click(screen.getByRole("button", { name: "Rename on GitHub" }));
+    await user.clear(screen.getByLabelText("New remote path"));
+    await user.type(screen.getByLabelText("New remote path"), "cancelled.md");
+    await user.click(screen.getByRole("button", { name: "Review move" }));
+    await screen.findByLabelText("Markdown changes");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Delete file" }));
+    expect(screen.getByRole("heading", { name: "Delete file" })).toBeDefined();
+    expect(screen.queryByLabelText("New remote path")).toBeNull();
+    expect(screen.queryByLabelText("Markdown changes")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(
+      screen.getByRole("heading", { name: "Discard changes" }),
+    ).toBeDefined();
+    expect(
+      screen.queryByRole("button", { name: "Review deletion from GitHub" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Sync with GitHub" }));
+    await screen.findByLabelText("GitHub versus local Markdown");
+    await user.click(
+      screen.getByRole("button", { name: "Ignore GitHub version" }),
+    );
+    await user.click(screen.getByRole("button", { name: "GitHub settings" }));
+    expect(screen.getByLabelText("Repositories")).toBeDefined();
+    expect(screen.queryByLabelText("GitHub versus local Markdown")).toBeNull();
+    expect(screen.queryByLabelText("New remote path")).toBeNull();
+    expect(state.onUpdate).not.toHaveBeenCalled();
+    expect(GitHubClient.prototype.publish).not.toHaveBeenCalled();
+  });
+
+  it("starts a fresh rename and commit message after cancelling a review", async () => {
+    renderLinkedDocument();
+    const user = await connect();
+    await user.click(screen.getByRole("button", { name: "Close GitHub" }));
+    await user.click(screen.getByRole("button", { name: "Rename on GitHub" }));
+    await user.clear(screen.getByLabelText("New remote path"));
+    await user.type(screen.getByLabelText("New remote path"), "cancelled.md");
+    await user.click(screen.getByRole("button", { name: "Review move" }));
+    await screen.findByLabelText("Commit message");
+    await user.clear(screen.getByLabelText("Commit message"));
+    await user.type(screen.getByLabelText("Commit message"), "Cancelled message");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Rename on GitHub" }));
+    expect(
+      (screen.getByLabelText("New remote path") as HTMLInputElement).value,
+    ).toBe(origin.path);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Commit changes" }));
+    await screen.findByLabelText("Commit message");
+    expect(
+      (screen.getByLabelText("Commit message") as HTMLInputElement).value,
+    ).toBe("Update notes.md");
+    await user.clear(screen.getByLabelText("Commit message"));
+    await user.type(screen.getByLabelText("Commit message"), "Save revised notes");
+    await user.click(screen.getByRole("button", { name: "Commit to GitHub" }));
+    await waitFor(() =>
+      expect(GitHubClient.prototype.createCommit).toHaveBeenCalledWith(
+        expect.objectContaining({ path: origin.path }),
+        "head",
+        "new-tree",
+        "Save revised notes",
+      ),
+    );
+  });
+
   it("requires confirmation to delete remotely and retains the repo working copy", async () => {
     let current: WorkspaceDocument = { ...local, github: origin };
     const onOpen = vi.fn();
@@ -1120,6 +1196,13 @@ describe("GitHub workspace", () => {
     );
     expect(documentRepository(current)).toBeUndefined();
     expect(current.githubPending?.candidateSha).toBe("candidate");
+    const dialog = screen.getByRole("dialog");
+    expect(
+      screen.getByRole("button", { name: "Close GitHub" }).hasAttribute("disabled"),
+    ).toBe(true);
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(current.githubPending?.candidateSha).toBe("candidate");
     publish();
     await waitFor(() =>
       expect(current.github?.path).toBe("docs/deep/Quarter-Q4-plans.md"),
@@ -1214,6 +1297,13 @@ describe("GitHub workspace", () => {
     await user.click(
       screen.getByRole("button", { name: "Move Notes to repository" }),
     );
+    await user.selectOptions(
+      screen.getByLabelText("Destination directory"),
+      "__new_directory__",
+    );
+    await user.type(screen.getByLabelText("New directory path"), "drafts/new");
+    await user.clear(screen.getByLabelText("Repository filename"));
+    await user.type(screen.getByLabelText("Repository filename"), "Retry.md");
     await user.click(screen.getByRole("button", { name: "Review move" }));
     await screen.findByLabelText("Markdown changes");
     await user.click(
@@ -1224,6 +1314,19 @@ describe("GitHub workspace", () => {
     expect(documentRepository(current)).toBeUndefined();
     expect(current.githubPending).toBeUndefined();
     expect(current.content).toBe(local.content);
+    expect(screen.getByLabelText("Destination path").textContent).toBe(
+      "drafts/new/Retry.md",
+    );
+    expect(screen.queryByLabelText("Markdown changes")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Review move" }));
+    await screen.findByLabelText("Markdown changes");
+    await user.click(
+      screen.getByRole("button", { name: "Move to repository" }),
+    );
+    await waitFor(() =>
+      expect(current.github?.path).toBe("drafts/new/Retry.md"),
+    );
+    expect(GitHubClient.prototype.publish).toHaveBeenCalledTimes(2);
   });
 
   it("never puts repository-only working copies into Local", async () => {

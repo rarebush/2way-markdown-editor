@@ -71,6 +71,31 @@ type RemoteReview = {
   origin: GitHubOrigin;
 };
 
+type Publication = "local-move" | "repository-draft";
+
+type FileActionForm =
+  | { kind: "idle" }
+  | {
+      kind: "destination";
+      documentId: string;
+      publication: Publication;
+      directory: string;
+      newDirectory: string;
+      filename: string;
+    }
+  | { kind: "rename"; destination: string };
+
+type FileAction =
+  | FileActionForm
+  | { kind: "confirm"; task: "delete" | "discard" }
+  | {
+      kind: "review";
+      review: GitHubReview;
+      message: string;
+      returnTo: FileActionForm;
+    }
+  | { kind: "sync"; comparison: RemoteReview };
+
 type FileNode = {
   path: string;
   children: Map<string, FileNode>;
@@ -190,18 +215,7 @@ export function GitHubWorkspace({
   const [branch, setBranch] = useState("");
   const [snapshot, setSnapshot] = useState<GitHubCommit | null>(null);
   const [entries, setEntries] = useState<GitHubTreeEntry[]>([]);
-  const [destination, setDestination] = useState("");
-  const [renamingRemote, setRenamingRemote] = useState(false);
-  const [moveDocumentId, setMoveDocumentId] = useState("");
-  const [publishingRepositoryDraft, setPublishingRepositoryDraft] =
-    useState(false);
-  const [moveDirectory, setMoveDirectory] = useState("");
-  const [newDirectory, setNewDirectory] = useState("");
-  const [moveFilename, setMoveFilename] = useState("");
-  const [review, setReview] = useState<GitHubReview | null>(null);
-  const [remoteReview, setRemoteReview] = useState<RemoteReview | null>(null);
-  const [message, setMessage] = useState("");
-  const [fileTask, setFileTask] = useState<"delete" | "discard" | null>(null);
+  const [fileAction, setFileAction] = useState<FileAction>({ kind: "idle" });
 
   useEffect(
     () => () => {
@@ -231,8 +245,29 @@ export function GitHubWorkspace({
           : null;
   const linked = document.github;
   const pending = document.githubPending;
+  const destination =
+    fileAction.kind === "rename" ? fileAction.destination : "";
+  const moveDirectory =
+    fileAction.kind === "destination" ? fileAction.directory : "";
+  const newDirectory =
+    fileAction.kind === "destination" ? fileAction.newDirectory : "";
+  const moveFilename =
+    fileAction.kind === "destination" ? fileAction.filename : "";
+  const review = fileAction.kind === "review" ? fileAction.review : null;
+  const message = fileAction.kind === "review" ? fileAction.message : "";
+  const remoteReview =
+    fileAction.kind === "sync" ? fileAction.comparison : null;
+  const fileTask = fileAction.kind === "confirm" ? fileAction.task : null;
+  const publicationForm =
+    fileAction.kind === "review" ? fileAction.returnTo : fileAction;
+  const publishingRepositoryDraft =
+    publicationForm.kind === "destination" &&
+    publicationForm.publication === "repository-draft";
   const moveDocument = documents.find(
-    (item) => item.id === moveDocumentId && !item.github,
+    (item) =>
+      fileAction.kind === "destination" &&
+      item.id === fileAction.documentId &&
+      !item.github,
   );
   const repositoryFiles: GitHubTreeEntry[] = [
     ...entries.filter((entry) => entry.type === "blob"),
@@ -297,13 +332,14 @@ export function GitHubWorkspace({
     if (!client || !target || documentRepository(item) || item.githubPending)
       return;
     onSelect?.(item.id);
-    setPublishingRepositoryDraft(false);
-    setMoveDocumentId(item.id);
-    setMoveDirectory("");
-    setNewDirectory("");
-    setMoveFilename(repositoryFilename(item.name));
-    setReview(null);
-    setRemoteReview(null);
+    setFileAction({
+      kind: "destination",
+      documentId: item.id,
+      publication: "local-move",
+      directory: "",
+      newDirectory: "",
+      filename: repositoryFilename(item.name),
+    });
     show();
   }
 
@@ -317,23 +353,21 @@ export function GitHubWorkspace({
     )
       return;
     const parts = document.repositoryPath.split("/");
-    setMoveFilename(parts.pop()!);
-    setMoveDirectory(parts.join("/"));
-    setNewDirectory("");
-    setMoveDocumentId(document.id);
-    setPublishingRepositoryDraft(true);
-    setReview(null);
-    setRemoteReview(null);
+    const filename = parts.pop()!;
+    setFileAction({
+      kind: "destination",
+      documentId: document.id,
+      publication: "repository-draft",
+      directory: parts.join("/"),
+      newDirectory: "",
+      filename,
+    });
     show();
   }
 
   function startRemoteRename() {
     if (!client || !linked || busy || pending) return;
-    setDestination(linked.path);
-    setRenamingRemote(true);
-    setReview(null);
-    setRemoteReview(null);
-    setMoveDocumentId("");
+    setFileAction({ kind: "rename", destination: linked.path });
     show();
   }
 
@@ -366,13 +400,9 @@ export function GitHubWorkspace({
   }
 
   function show(purpose: "settings" | "file" = "file") {
-    setFileTask(null);
     setDialogPurpose(purpose);
     if (purpose === "settings") {
-      setReview(null);
-      setRemoteReview(null);
-      setMoveDocumentId("");
-      setRenamingRemote(false);
+      setFileAction({ kind: "idle" });
     }
     setError("");
     setNotice("");
@@ -384,22 +414,14 @@ export function GitHubWorkspace({
     if (workingRef.current) return;
     generationRef.current += 1;
     setToken("");
-    setReview(null);
-    setRemoteReview(null);
-    setMoveDocumentId("");
-    setRenamingRemote(false);
+    setFileAction({ kind: "idle" });
     setDialogOpen(false);
-    setFileTask(null);
     dialogRef.current?.close();
   }
 
   function startFileTask(task: "delete" | "discard") {
     show();
-    setReview(null);
-    setRemoteReview(null);
-    setRenamingRemote(false);
-    setMoveDocumentId("");
-    setFileTask(task);
+    setFileAction({ kind: "confirm", task });
   }
 
   async function discardChanges(latest: boolean) {
@@ -420,7 +442,7 @@ export function GitHubWorkspace({
           updatedAt: Date.now(),
         };
       });
-      setFileTask(null);
+      setFileAction({ kind: "idle" });
       setDialogOpen(false);
       dialogRef.current?.close();
     });
@@ -488,15 +510,11 @@ export function GitHubWorkspace({
     setBranch("");
     setEntries([]);
     setSnapshot(null);
-    setReview(null);
-    setRemoteReview(null);
+    setFileAction({ kind: "idle" });
     setRepositoryPage(0);
     setMoreRepositories(false);
     setRepoInput("");
     setFilter("");
-    setDestination("");
-    setMoveDocumentId("");
-    setMessage("");
     setError("");
     setNotice("");
   }
@@ -537,7 +555,6 @@ export function GitHubWorkspace({
       setBranch(selected.default_branch);
       setSnapshot(head);
       setEntries(files);
-      setDestination(repositoryFilename(document.name));
       selectRepositoryWorkspace(selectedTarget);
       setDialogOpen(false);
       dialogRef.current?.close();
@@ -625,11 +642,13 @@ export function GitHubWorkspace({
           throw failure;
         const remote = await client.open(selectedTarget, source.github!.path);
         if (!isCurrent()) return;
-        setReview(null);
-        setRemoteReview({
-          documentId: source.id,
-          localContent: source.content,
-          origin: remote,
+        setFileAction({
+          kind: "sync",
+          comparison: {
+            documentId: source.id,
+            localContent: source.content,
+            origin: remote,
+          },
         });
         setNotice(
           "GitHub has a newer version. Choose which content to keep before committing.",
@@ -637,17 +656,22 @@ export function GitHubWorkspace({
         return;
       }
       if (!isCurrent()) return;
-      setRemoteReview(null);
-      setReview(prepared);
-      setMessage(
-        `${operation === "move" ? "Move" : operation === "delete" ? "Delete" : operation === "create" ? "Create" : "Update"} ${prepared.origin.path}`,
-      );
+      setFileAction({
+        kind: "review",
+        review: prepared,
+        message: `${operation === "move" ? "Move" : operation === "delete" ? "Delete" : operation === "create" ? "Create" : "Update"} ${prepared.origin.path}`,
+        returnTo:
+          fileAction.kind === "destination" || fileAction.kind === "rename"
+            ? fileAction
+            : { kind: "idle" },
+      });
     });
   }
 
   async function commit(event: React.FormEvent) {
     event.preventDefault();
-    if (!client || !review) return;
+    if (!client || fileAction.kind !== "review") return;
+    const { review, message, returnTo } = fileAction;
     await run(async () => {
       setMutating(true);
       const candidate = await buildGitHubCommit(client, review, message);
@@ -661,7 +685,7 @@ export function GitHubWorkspace({
       try {
         await client.publish(candidate.origin, candidate.candidateSha);
       } catch (failure) {
-        setReview(null);
+        setFileAction(returnTo);
         if (!(failure instanceof GitHubError) || failure.uncertain)
           throw failure;
         await onUpdate(review.documentId, (current) => ({
@@ -670,13 +694,11 @@ export function GitHubWorkspace({
         }));
         throw failure;
       }
-      setReview(null);
-      setRenamingRemote(false);
+      setFileAction({ kind: "idle" });
       await onUpdate(review.documentId, (current) =>
         finishGitHubCommit(current, candidate),
       );
       if (candidate.operation === "create") {
-        setMoveDocumentId("");
         changeWorkspace("repository");
       }
       updateTreeAfterCommit(candidate, review.oldPath);
@@ -686,7 +708,6 @@ export function GitHubWorkspace({
       if (candidate.operation === "delete" && onDeleteWorkingCopy) {
         await onDeleteWorkingCopy(review.documentId);
         setDialogOpen(false);
-        setFileTask(null);
         dialogRef.current?.close();
       }
     });
@@ -714,7 +735,6 @@ export function GitHubWorkspace({
       )
         await onDeleteWorkingCopy(document.id);
       if (outcome === "published" && pending.operation === "create") {
-        setMoveDocumentId("");
         changeWorkspace("repository");
       }
       setNotice(
@@ -728,6 +748,7 @@ export function GitHubWorkspace({
   async function refresh() {
     if (!client || !linked) return;
     show();
+    setFileAction({ kind: "idle" });
     await run(async (isCurrent) => {
       const repositoryInfo = await client.repository(linked);
       if (repositoryInfo.id !== linked.repositoryId)
@@ -747,11 +768,13 @@ export function GitHubWorkspace({
         });
         if (!isCurrent()) return;
       }
-      setReview(null);
-      setRemoteReview({
-        documentId: document.id,
-        localContent: document.content,
-        origin: remote,
+      setFileAction({
+        kind: "sync",
+        comparison: {
+          documentId: document.id,
+          localContent: document.content,
+          origin: remote,
+        },
       });
     });
   }
@@ -783,10 +806,15 @@ export function GitHubWorkspace({
           "update",
           remoteReview.origin,
         );
-        setReview(prepared);
-        setMessage(`Update ${prepared.origin.path}`);
+        setFileAction({
+          kind: "review",
+          review: prepared,
+          message: `Update ${prepared.origin.path}`,
+          returnTo: { kind: "idle" },
+        });
+      } else {
+        setFileAction({ kind: "idle" });
       }
-      setRemoteReview(null);
       setNotice(
         replace
           ? "The draft now contains the checked GitHub version."
@@ -1312,7 +1340,7 @@ export function GitHubWorkspace({
                 </a>
               </div>
             )}
-            {fileTask && !review && !remoteReview ? (
+            {fileTask ? (
               <section className="github-review">
                 <h3>
                   {fileTask === "delete" ? "Delete file" : "Discard changes"}
@@ -1422,7 +1450,14 @@ export function GitHubWorkspace({
                 <input
                   id="github-message"
                   value={message}
-                  onChange={(event) => setMessage(event.target.value)}
+                  onChange={(event) => {
+                    const message = event.target.value;
+                    setFileAction((current) =>
+                      current.kind === "review"
+                        ? { ...current, message }
+                        : current,
+                    );
+                  }}
                   maxLength={500}
                   required
                   disabled={busy}
@@ -1505,7 +1540,7 @@ export function GitHubWorkspace({
                           });
                           dialogRef.current?.close();
                           setDialogOpen(false);
-                          setRemoteReview(null);
+                          setFileAction({ kind: "idle" });
                         }
                       })
                     }
@@ -1534,7 +1569,7 @@ export function GitHubWorkspace({
                   )}
                 </div>
               </section>
-            ) : renamingRemote && linked ? (
+            ) : fileAction.kind === "rename" && linked ? (
               <form
                 className="github-review"
                 onSubmit={(event) => {
@@ -1550,7 +1585,14 @@ export function GitHubWorkspace({
                 <input
                   id="github-move-path"
                   value={destination}
-                  onChange={(event) => setDestination(event.target.value)}
+                  onChange={(event) => {
+                    const destination = event.target.value;
+                    setFileAction((current) =>
+                      current.kind === "rename"
+                        ? { ...current, destination }
+                        : current,
+                    );
+                  }}
                   required
                   disabled={busy}
                 />
@@ -1597,7 +1639,14 @@ export function GitHubWorkspace({
                   id="github-move-directory"
                   value={moveDirectory}
                   disabled={busy}
-                  onChange={(event) => setMoveDirectory(event.target.value)}
+                  onChange={(event) => {
+                    const directory = event.target.value;
+                    setFileAction((current) =>
+                      current.kind === "destination"
+                        ? { ...current, directory }
+                        : current,
+                    );
+                  }}
                 >
                   {[...directories].sort().map((directory) => (
                     <option key={directory} value={directory}>
@@ -1616,7 +1665,14 @@ export function GitHubWorkspace({
                       value={newDirectory}
                       required
                       disabled={busy}
-                      onChange={(event) => setNewDirectory(event.target.value)}
+                      onChange={(event) => {
+                        const newDirectory = event.target.value;
+                        setFileAction((current) =>
+                          current.kind === "destination"
+                            ? { ...current, newDirectory }
+                            : current,
+                        );
+                      }}
                     />
                   </>
                 )}
@@ -1628,7 +1684,14 @@ export function GitHubWorkspace({
                   value={moveFilename}
                   disabled={busy}
                   required
-                  onChange={(event) => setMoveFilename(event.target.value)}
+                  onChange={(event) => {
+                    const filename = event.target.value;
+                    setFileAction((current) =>
+                      current.kind === "destination"
+                        ? { ...current, filename }
+                        : current,
+                    );
+                  }}
                 />
                 <p className="github-target" aria-label="Destination path">
                   {movePath}
@@ -1648,7 +1711,7 @@ export function GitHubWorkspace({
                     className="secondary-action"
                     type="button"
                     disabled={busy}
-                    onClick={() => setMoveDocumentId("")}
+                    onClick={() => setFileAction({ kind: "idle" })}
                   >
                     Cancel
                   </button>
