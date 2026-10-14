@@ -9,6 +9,30 @@ function createTestDocument(name: string, content: string): WorkspaceDocument {
 }
 
 describe("per-document save scheduling", () => {
+  it("flushes only the requested document without waiting for unrelated saves", async () => {
+    const unrelated = createTestDocument("Unrelated", "Pending write");
+    const reviewed = createTestDocument("Reviewed", "Recovery marker");
+    let finishUnrelated!: () => void;
+    const save = vi
+      .fn<(document: WorkspaceDocument) => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishUnrelated = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const scheduler = createDocumentSaveScheduler(save);
+    scheduler.schedule(unrelated);
+    const unrelatedWrite = scheduler.flush(unrelated.id);
+    await Promise.resolve();
+    scheduler.schedule(reviewed);
+    await scheduler.flush(reviewed.id);
+    expect(save).toHaveBeenCalledWith(reviewed);
+    finishUnrelated();
+    await unrelatedWrite;
+  });
+
   it("reports explicit flush failures without an unhandled callback rejection and permits retry", async () => {
     const save = vi
       .fn<(document: WorkspaceDocument) => Promise<void>>()

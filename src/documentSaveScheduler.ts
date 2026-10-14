@@ -44,6 +44,7 @@ export function createDocumentSaveScheduler(
   }
 
   return {
+    flush,
     schedule(document: WorkspaceDocument, callbacks: SaveCallbacks = {}) {
       const existing = pending.get(document.id);
       if (existing) clearTimeout(existing.timer);

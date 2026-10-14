@@ -108,6 +108,13 @@ Include which pane you were typing in, whether you were in a table, and what you
 
 ## Checks
 
+Document collection, workspace selection, autosave, and durable draft updates are
+owned by [`useDocumentWorkspace`](./src/useDocumentWorkspace.ts). The app owns
+dialogs and editor presentation; IndexedDB access stays in
+[`documents`](./src/documents.ts). Durable GitHub metadata updates flush only the
+affected document through the per-document save scheduler. Pending saves for
+other drafts continue independently.
+
 ```sh
 npm test
 npm run lint

@@ -205,6 +205,11 @@ describe("App GitHub document ownership", () => {
     render(<App />);
     await screen.findByLabelText("Local text");
     await user.click(screen.getByRole("button", { name: "Open remote" }));
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Local text") as HTMLTextAreaElement).value,
+      ).toBe(origin.baseContent),
+    );
     await user.clear(screen.getByLabelText("Local text"));
     await user.type(screen.getByLabelText("Local text"), "Uncommitted draft");
     const original = JSON.parse(
