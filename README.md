@@ -121,6 +121,13 @@ derives the remote/draft listing, cached-file lookup, and destination directorie
 using path indexes. Missing remote files retain their cached working copies;
 unpublished drafts never shadow existing remote paths.
 
+[`AppGitHub.integration.test.tsx`](./src/AppGitHub.integration.test.tsx) exercises
+the real app, GitHub workspace, sync logic, and browser-local persistence together.
+It covers offline draft restoration, reviewed Local-to-repository moves, and
+publication recovery across reloads without duplicate commits. GitHub HTTP
+responses and the heavyweight editor are mocked; real GitHub permissions and
+editor caret behaviour are outside these tests.
+
 ```sh
 npm test
 npm run lint
