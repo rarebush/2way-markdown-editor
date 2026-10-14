@@ -41,6 +41,20 @@ export function documentRepository(
   return document.github ?? document.repository;
 }
 
+export function inWorkspace(
+  document: WorkspaceDocument,
+  space: "local" | "repository",
+  repository: RepositoryWorkspace | null,
+) {
+  const owner = documentRepository(document);
+  return space === "local"
+    ? !owner
+    : !!owner &&
+        !!repository &&
+        owner.repositoryId === repository.repositoryId &&
+        owner.branch === repository.branch;
+}
+
 function isRepositoryWorkspace(value: unknown): value is RepositoryWorkspace {
   if (!value || typeof value !== "object") return false;
   const repository = value as Record<string, unknown>;

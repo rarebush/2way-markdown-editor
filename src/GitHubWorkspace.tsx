@@ -24,7 +24,8 @@ import type {
   RepositoryWorkspace,
   WorkspaceDocument,
 } from "./documents";
-import { documentRepository } from "./documents";
+import { documentRepository, inWorkspace } from "./documents";
+import { repositoryFiles as selectRepositoryFiles } from "./repositoryFiles";
 import {
   GitHubClient,
   GitHubError,
@@ -269,53 +270,17 @@ export function GitHubWorkspace({
       item.id === fileAction.documentId &&
       !item.github,
   );
-  const repositoryFiles: GitHubTreeEntry[] = [
-    ...entries.filter((entry) => entry.type === "blob"),
-    ...documents
-      .filter((item) => {
-        const owner = documentRepository(item);
-        return (
-          !item.github &&
-          !!item.repositoryPath &&
-          owner?.repositoryId === target?.repositoryId &&
-          owner?.branch === target?.branch &&
-          !entries.some((entry) => entry.path === item.repositoryPath)
-        );
-      })
-      .map((item) => ({
-        path: item.repositoryPath!,
-        type: "blob" as const,
-        mode: "100644",
-        sha: item.id,
-      })),
-  ];
+  const {
+    files: repositoryFiles,
+    remotePaths,
+    cachedByPath,
+    otherCachedFiles,
+    directories,
+  } = selectRepositoryFiles(entries, documents, target);
   const selectedDirectory =
     moveDirectory === "__new_directory__" ? newDirectory.trim() : moveDirectory;
   const movePath = [selectedDirectory, moveFilename].filter(Boolean).join("/");
-  const moveCollision = entries.some((entry) => entry.path === movePath);
-  const directories = new Set([""]);
-  for (const entry of [...entries, ...repositoryFiles]) {
-    if (entry.type === "tree") directories.add(entry.path);
-    const parts = entry.path.split("/");
-    parts.pop();
-    while (parts.length) {
-      directories.add(parts.join("/"));
-      parts.pop();
-    }
-  }
-  const otherCachedFiles = documents.filter((item) => {
-    const repository = documentRepository(item);
-    return (
-      !!repository &&
-      repository.repositoryId === target?.repositoryId &&
-      repository.branch === target.branch &&
-      !repositoryFiles.some(
-        (entry) =>
-          entry.path === (item.github?.path ?? item.repositoryPath) &&
-          (!!item.github || entry.sha === item.id),
-      )
-    );
-  });
+  const moveCollision = remotePaths.has(movePath);
 
   function changeWorkspace(next: "local" | "repository") {
     setInternalWorkspace(next);
@@ -581,15 +546,7 @@ export function GitHubWorkspace({
 
   async function openRepositoryFile(path: string) {
     if (!target) return;
-    const cached = documents.find((item) => {
-      const owner = documentRepository(item);
-      return (
-        owner?.repositoryId === target.repositoryId &&
-        owner.branch === target.branch &&
-        (item.github?.path ?? item.repositoryPath) === path &&
-        (!!item.github || !entries.some((entry) => entry.path === path))
-      );
-    });
+    const cached = cachedByPath.get(path);
     if (cached && onSelect) {
       onSelect(cached.id);
       return;
@@ -1163,9 +1120,7 @@ export function GitHubWorkspace({
               <RepositoryTree
                 files={repositoryFiles}
                 activePath={
-                  documentRepository(document)?.repositoryId ===
-                    target.repositoryId &&
-                  documentRepository(document)?.branch === target.branch
+                  inWorkspace(document, "repository", target)
                     ? (linked?.path ?? document.repositoryPath)
                     : undefined
                 }

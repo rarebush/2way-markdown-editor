@@ -17,10 +17,11 @@ import { encodeMarkdown, validateMarkdownPath } from "./githubClient";
 import { repositoryFilename } from "./githubSync";
 import {
   documentRepository,
+  inWorkspace,
   type RepositoryWorkspace,
   type WorkspaceDocument,
 } from "./documents";
-import { inWorkspace, useDocumentWorkspace } from "./useDocumentWorkspace";
+import { useDocumentWorkspace } from "./useDocumentWorkspace";
 import "./App.css";
 
 type ViewMode = "split" | "source" | "rendered";

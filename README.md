@@ -115,6 +115,12 @@ dialogs and editor presentation; IndexedDB access stays in
 affected document through the per-document save scheduler. Pending saves for
 other drafts continue independently.
 
+Repository membership is shared through `inWorkspace` in
+[`documents`](./src/documents.ts). [`repositoryFiles`](./src/repositoryFiles.ts)
+derives the remote/draft listing, cached-file lookup, and destination directories
+using path indexes. Missing remote files retain their cached working copies;
+unpublished drafts never shadow existing remote paths.
+
 ```sh
 npm test
 npm run lint

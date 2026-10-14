@@ -4,6 +4,7 @@ import {
   createDocument,
   deleteDocument,
   documentRepository,
+  inWorkspace,
   listDocuments,
   saveDocument,
   type GitHubOrigin,
@@ -11,20 +12,6 @@ import {
   type WorkspaceDocument,
 } from "./documents";
 import type { EditOrigin } from "./markdownSync";
-
-export function inWorkspace(
-  document: WorkspaceDocument,
-  space: "local" | "repository",
-  repository: RepositoryWorkspace | null,
-) {
-  const owner = documentRepository(document);
-  return space === "local"
-    ? !owner
-    : !!owner &&
-        !!repository &&
-        owner.repositoryId === repository.repositoryId &&
-        owner.branch === repository.branch;
-}
 
 export function useDocumentWorkspace(starterMarkdown: string) {
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
@@ -149,8 +136,8 @@ export function useDocumentWorkspace(starterMarkdown: string) {
       !separateCopy &&
       documentsRef.current.find(
         (item) =>
-          item.github?.repositoryId === origin.repositoryId &&
-          item.github.branch === origin.branch &&
+          !!item.github &&
+          inWorkspace(item, "repository", origin) &&
           item.github.path === origin.path,
       );
     if (existing) {
