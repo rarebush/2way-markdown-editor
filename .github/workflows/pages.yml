@@ -36,7 +36,6 @@ jobs:
         with:
           name: github-pages
           path: dist
-          retention-days: 1
 
   deploy:
     needs: build
