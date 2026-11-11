@@ -17,35 +17,43 @@ The following branches are maintained across all remotes:
 - `copilot/confirm-zoom-issue-and-solution` (origin only)
 - `copilot/modify-markdown-files-in-repo` (origin only)
 
-## Hard Rule: All Accessible Remotes Stay In Sync
+## Hard Rule: sallen-wiley Always Pushes to Origin
 
-**MANDATORY ENFORCEMENT**: After every commit or merge to `main` or any tracked branch, you MUST:
+**MANDATORY ENFORCEMENT**: After every commit or merge to `main` or any tracked branch:
 
-1. **Push to all remotes you have write access to**
+1. **sallen-wiley must push to origin**
    ```bash
    git push origin main
    ```
-   (rarebush is fetch-only; the rarebush account owner must sync their remote)
+   This is non-negotiable. Every commit to `main` must reach `origin/main` without exception.
 
 2. **Verify origin is up-to-date**
    ```bash
    git log origin/main --oneline -1
    ```
 
-3. **No exceptions** — Every single push to `main` must go to `origin` without fail
-   - Incomplete pushes cause deployment delays
-   - Stale origin blocks CI/CD pipelines (GitHub Pages deployment depends on origin/main)
-   - rarebush will be out of sync until its owner pulls from origin
+3. **Why this matters**:
+   - GitHub Pages deployment depends on `origin/main` being current
+   - Stale origin blocks CI/CD pipelines
+   - This is the single point of truth for the project
 
-## Access Model
+## Remote Sync Responsibility Model
 
-- **sallen-wiley (you)**: Full push access to `origin` only
-- **rarebush account**: Owns its own fork; must pull from origin to stay in sync
-- **GitHub Pages**: Deploys from `origin/main` only
+| Account | Remote | Responsibility |
+|---------|--------|-----------------|
+| **sallen-wiley** (you) | `origin` | **Push immediately after every commit to `main`** — No exceptions |
+| **rarebush** | `rarebush` | **Pull from origin to stay in sync** — rarebush account owner is responsible for this |
+| **GitHub Pages** | origin | Deployment automation watches `origin/main` only |
 
-**Note**: If you need rarebush to stay in sync automatically, either:
-  - Have the rarebush account maintainer set up GitHub Actions to pull from origin, OR
-  - Request push access to rarebush and then apply the multi-remote sync rule
+**Sync Flow:**
+```
+sallen-wiley commits → git push origin main → GitHub Pages auto-deploys
+                    ↓
+            rarebush account pulls from origin to catch up
+```
+
+Your job: Always push to origin.  
+Rarebush account's job: Pull from origin to stay current.
 
 ## GitHub Pages Deployment
 
