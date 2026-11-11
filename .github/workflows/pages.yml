@@ -31,10 +31,11 @@ jobs:
           npm run lint
       - name: Build site
         run: npm run build
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       - name: Upload site artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v4
         with:
-          name: github-pages
           path: dist
 
   deploy:
