@@ -62,7 +62,34 @@ Rarebush account's job: Pull from origin to stay current.
 - **Both remotes must stay in sync** so either can serve as a recovery point
 - If deployment fails, verify both remotes are in sync before retrying
 
-## How to Add or Remove Remotes
+## Automated Sync Using PowerShell Script
+
+To sync both remotes with a single command:
+
+```powershell
+.\sync-remotes.ps1
+```
+
+This script:
+1. Pushes to `origin` as sallen-wiley
+2. Switches to rarebush GitHub credentials
+3. Pushes to `rarebush`
+4. Switches back to sallen-wiley
+5. Verifies both remotes are in sync
+
+**Setup:**
+- Both GitHub accounts must be authenticated in GitHub CLI: `gh auth status`
+- Both accounts must have push access to their respective repositories
+- Run this script after committing to `main` to keep remotes in sync
+
+### Example Usage
+
+```bash
+# After making commits to main
+git commit -m "Your commit message"
+.\sync-remotes.ps1
+# Output: SUCCESS: Both remotes in sync at cc64fbd
+```
 
 **Adding a new remote:**
 ```bash
