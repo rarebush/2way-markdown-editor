@@ -73,6 +73,7 @@ The app checks the affected file revision and destination before writing and nev
 - Split view: edit Markdown and the formatted document side by side.
 - Rendered only: edit the formatted document directly.
 - The rich editor supports common Markdown and GFM constructs, including tables, task lists, strikethrough, links, quotations, and fenced code blocks.
+- Moving the caret or typing in either pane reveals the corresponding block in the other pane. Switching views also reveals the last editing location. This synchronizes scrolling, not cursor positions or selections, and never moves focus. Lists, quotations, tables, and code fences scroll as whole blocks; a block already visible is left in place. Blank lines use the preceding block (or the first block at the start of a document).
 
 ## Markdown preservation
 

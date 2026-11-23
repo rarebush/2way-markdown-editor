@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type EditorView, type ViewUpdate } from "@uiw/react-codemirror";
 import { sourceMarkdownExtensions } from "./sourceMarkdown";
 import { withDirectCellEditing } from "./tableInteractions";
 import { editorDiagnostics } from "./editorDiagnostics";
@@ -79,6 +79,55 @@ export function MarkdownSurface({
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const expectedRichEchoRef = useRef<string | null>(null);
+  const sourceRef = useRef<EditorView | null>(null);
+  const viewRef = useRef(view);
+  const lastActiveRef = useRef<EditOrigin | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+  const scheduleScrollSync = useCallback(() => {
+    if (scrollFrameRef.current !== null)
+      window.cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      const source = sourceRef.current;
+      const crepe = crepeRef.current;
+      const runtime = runtimeRef.current;
+      const active = lastActiveRef.current;
+      if (!source || !crepe || !runtime || !active) return;
+      if (active === "source" && source.composing) return;
+      if (
+        (active === "source" && viewRef.current === "source") ||
+        (active === "rich" && viewRef.current === "rendered")
+      )
+        return;
+      const markdown = source.state.doc.toString();
+      if (markdown !== valueRef.current) return;
+      const block = runtime.getScrollBlock(
+        crepe,
+        markdown,
+        active,
+        source.state.selection.main.head,
+      );
+      if (!block) return;
+      if (active === "source") {
+        runtime.revealRichBlock(crepe, block.richFrom);
+      } else {
+        runtime.revealSourceBlock(source, block.sourceFrom);
+      }
+    });
+  }, []);
+  const handleSourceUpdate = useCallback(
+    (update: ViewUpdate) => {
+      if (
+        update.view.hasFocus &&
+        !update.view.composing &&
+        (update.selectionSet || update.docChanged || update.focusChanged)
+      ) {
+        lastActiveRef.current = "source";
+        scheduleScrollSync();
+      }
+    },
+    [scheduleScrollSync],
+  );
   const handleSourceChange = useCallback((markdown: string) => {
     if (editorDiagnostics.isEnabled()) {
       editorDiagnostics.record("source-markdown-emitted", {
@@ -102,10 +151,31 @@ export function MarkdownSurface({
   }, [onChange]);
 
   useEffect(() => {
+    viewRef.current = view;
+    scheduleScrollSync();
+  }, [view, value, scheduleScrollSync]);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null)
+        window.cancelAnimationFrame(scrollFrameRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
     if (!rootRef.current) return;
 
     const root = rootRef.current;
     const recordInteraction = (event: Event) => {
+      if (
+        (event.type === "focusin" || event.type === "compositionend") &&
+        event.target instanceof Element &&
+        event.target.closest(".ProseMirror")
+      ) {
+        lastActiveRef.current = "rich";
+        scheduleScrollSync();
+      }
       if (!editorDiagnostics.isEnabled()) return;
       editorDiagnostics.record(`preview-${event.type}`, {
         inputType: event instanceof InputEvent ? event.inputType : null,
@@ -135,7 +205,13 @@ export function MarkdownSurface({
 
       crepe.on((listener) => {
         listener.selectionUpdated((ctx, selection) => {
-          if (!editorReadyRef.current || !editorDiagnostics.isEnabled()) return;
+          if (!editorReadyRef.current) return;
+          const richView = ctx.get(runtime.editorViewCtx);
+          if (richView.hasFocus() && !richView.composing) {
+            lastActiveRef.current = "rich";
+            scheduleScrollSync();
+          }
+          if (!editorDiagnostics.isEnabled()) return;
           editorDiagnostics.record("preview-selection", {
             from: selection.from,
             to: selection.to,
@@ -164,6 +240,7 @@ export function MarkdownSurface({
             });
           if (markdown !== valueRef.current)
             onChangeRef.current(markdown, "rich");
+          if (editorReadyRef.current) scheduleScrollSync();
         });
       });
 
@@ -206,6 +283,7 @@ export function MarkdownSurface({
           "initialization",
         );
       }
+      scheduleScrollSync();
     });
 
     return () => {
@@ -221,7 +299,7 @@ export function MarkdownSurface({
         void crepe.destroy();
       }
     };
-  }, [documentId]);
+  }, [documentId, scheduleScrollSync]);
 
   useEffect(() => {
     const crepe = crepeRef.current;
@@ -248,10 +326,11 @@ export function MarkdownSurface({
       );
       if (expectedEcho !== undefined)
         expectedRichEchoRef.current = expectedEcho;
+      scheduleScrollSync();
     }, 50);
 
     return () => window.clearTimeout(timeoutId);
-  }, [value, origin]);
+  }, [value, origin, scheduleScrollSync]);
 
   return (
     <div className={`editor-surfaces editor-surfaces--${view}`}>
@@ -269,6 +348,14 @@ export function MarkdownSurface({
           height="100%"
           extensions={sourceMarkdownExtensions}
           onChange={handleSourceChange}
+          onCreateEditor={(editor) => {
+            sourceRef.current = editor;
+          }}
+          onUpdate={handleSourceUpdate}
+          onCompositionEnd={() => {
+            lastActiveRef.current = "source";
+            scheduleScrollSync();
+          }}
           basicSetup={markdownBasicSetup}
           aria-label="Markdown source"
         />
