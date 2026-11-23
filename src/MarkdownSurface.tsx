@@ -100,7 +100,7 @@ export function MarkdownSurface({
       )
         return;
       const markdown = source.state.doc.toString();
-      if (markdown !== valueRef.current) return;
+      if (!source.state.doc.eq(source.state.toText(valueRef.current))) return;
       const block = runtime.getScrollBlock(
         crepe,
         markdown,
