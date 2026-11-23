@@ -10,6 +10,7 @@ import {
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
 import { findScrollBlock, mapScrollBlocks, revealBlock } from "./blockScrollSync";
+import { replaceAll } from "@milkdown/kit/utils";
 
 let editor: Editor | undefined;
 
@@ -95,6 +96,25 @@ describe("block scroll mapping", () => {
     const { map } = await setup("# Old\n\nParagraph");
     expect(map("# New heading\n\nParagraph")).toEqual([]);
     expect(map("# Old")).toEqual([]);
+  });
+
+  it.each([
+    ["nested", "1. Item\n\n   | First | Second |\n   | --- | --- |\n   | short |"],
+    ["top-level", "| First | Second |\n| --- | --- |\n| short |"],
+  ])("maps blocks after the rich editor repairs a ragged %s table", async (_label, table) => {
+    const markdown = [
+      "# Before",
+      table,
+      "## After",
+    ].join("\n\n");
+    const { map, view } = await setup(markdown);
+    editor!.action(replaceAll(markdown));
+    const blocks = map(markdown);
+    expect(blocks).toHaveLength(3);
+    expect(markdown.slice(blocks[2].sourceFrom, blocks[2].sourceTo)).toBe("## After");
+    expect(view.state.doc.nodeAt(blocks[2].richFrom)?.textContent).toBe("After");
+    expect(findScrollBlock(blocks, blocks[2].richFrom + 1, "rich")).toBe(blocks[2]);
+    expect(map(markdown.replace("## After", "## Other"))).toEqual([]);
   });
 
   it("handles empty documents without inventing a rendered target", async () => {
