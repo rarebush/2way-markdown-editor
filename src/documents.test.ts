@@ -93,6 +93,21 @@ describe("browser document storage", () => {
     await expect(listDocuments()).resolves.toContainEqual(document);
   });
 
+  it("persists a draft's formatting override without changing its Markdown", async () => {
+    const document = {
+      ...createDocument("Formatting", "---\ntitle: Test\n---\n"),
+      formatting: {
+        rule: "-" as const,
+        bullet: "+" as const,
+        emphasis: "preserve" as const,
+        headings: "atx" as const,
+      },
+    };
+    documentIds.push(document.id);
+    await saveDocument(document);
+    await expect(listDocuments()).resolves.toContainEqual(document);
+  });
+
   it("lists recently edited documents first", async () => {
     const older = { ...createDocument("Older", ""), updatedAt: 100 };
     const newer = { ...createDocument("Newer", ""), updatedAt: 200 };

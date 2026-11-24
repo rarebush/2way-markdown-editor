@@ -1,14 +1,29 @@
-import { useCallback, useEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import CodeMirror, { type EditorView, type ViewUpdate } from "@uiw/react-codemirror";
+import { Settings2 } from "lucide-react";
 import { sourceMarkdownExtensions } from "./sourceMarkdown";
 import { withDirectCellEditing } from "./tableInteractions";
 import { editorDiagnostics } from "./editorDiagnostics";
 import {
+  differencesWereApproved,
+  getRoundTripDifferences,
   isProgrammaticRichEcho,
   shouldReplaceRichDocument,
   type EditOrigin,
+  type RoundTripDifferences,
 } from "./markdownSync";
 import type { RichEditor } from "./richEditorRuntime";
+import {
+  defaultFormattingPreferences,
+  type FormattingPreferences,
+} from "./formattingPreferences";
 import "@milkdown/crepe/theme/common/style.css";
 import "@milkdown/crepe/theme/classic.css";
 
@@ -18,7 +33,16 @@ type MarkdownSurfaceProps = {
   onChange: (value: string, origin: EditOrigin) => void;
   origin?: EditOrigin;
   view: "split" | "source" | "rendered";
+  formatting?: FormattingPreferences;
+  onFormattingSettings?: () => void;
+  ref?: Ref<MarkdownSurfaceHandle>;
 };
+
+export type MarkdownSurfaceHandle = {
+  prepareFormatting: (markdown: string) => string;
+};
+
+type PreviewStatus = "checking" | "blocked" | "unverified" | "ready" | "error";
 
 const topBarToolLabels = [
   "Bold",
@@ -71,6 +95,9 @@ export function MarkdownSurface({
   origin,
   onChange,
   view,
+  formatting = defaultFormattingPreferences,
+  onFormattingSettings,
+  ref,
 }: MarkdownSurfaceProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const crepeRef = useRef<RichEditor | null>(null);
@@ -81,8 +108,48 @@ export function MarkdownSurface({
   const expectedRichEchoRef = useRef<string | null>(null);
   const sourceRef = useRef<EditorView | null>(null);
   const viewRef = useRef(view);
+  const formattingRef = useRef(formatting);
+  const [previewStatus, setPreviewStatus] = useState<PreviewStatus>("checking");
+  const previewStatusRef = useRef(previewStatus);
+  const approvedDifferencesRef = useRef<RoundTripDifferences>(new Map());
+  const currentDifferencesRef = useRef<RoundTripDifferences | null>(null);
   const lastActiveRef = useRef<EditOrigin | null>(null);
   const scrollFrameRef = useRef<number | null>(null);
+  const updatePreviewStatus = useCallback(
+    (status: PreviewStatus) => {
+      previewStatusRef.current = status;
+      setPreviewStatus(status);
+    },
+    [],
+  );
+  const checkPreview = useCallback(
+    (markdown: string, serialized: string) => {
+      const differences = getRoundTripDifferences(markdown, serialized);
+      currentDifferencesRef.current = differences;
+      if (
+        differences &&
+        differencesWereApproved(differences, approvedDifferencesRef.current)
+      ) {
+        approvedDifferencesRef.current = differences;
+        updatePreviewStatus("ready");
+      } else {
+        updatePreviewStatus(differences ? "blocked" : "unverified");
+      }
+    },
+    [updatePreviewStatus],
+  );
+  useImperativeHandle(ref, () => ({
+    prepareFormatting(markdown) {
+      const crepe = crepeRef.current;
+      const runtime = runtimeRef.current;
+      if (!editorReadyRef.current || !crepe || !runtime)
+        throw new Error("The preview is still loading. Try again shortly.");
+      const formatted = runtime.formatRichMarkdown(crepe, markdown);
+      if (formatted !== crepe.getMarkdown())
+        throw new Error("The editors are still synchronizing. Try again shortly.");
+      return formatted;
+    },
+  }), []);
   const scheduleScrollSync = useCallback(() => {
     if (scrollFrameRef.current !== null)
       window.cancelAnimationFrame(scrollFrameRef.current);
@@ -93,6 +160,7 @@ export function MarkdownSurface({
       const runtime = runtimeRef.current;
       const active = lastActiveRef.current;
       if (!source || !crepe || !runtime || !active) return;
+      if (previewStatusRef.current !== "ready") return;
       if (active === "source" && source.composing) return;
       if (
         (active === "source" && viewRef.current === "source") ||
@@ -128,14 +196,18 @@ export function MarkdownSurface({
     },
     [scheduleScrollSync],
   );
-  const handleSourceChange = useCallback((markdown: string) => {
-    if (editorDiagnostics.isEnabled()) {
-      editorDiagnostics.record("source-markdown-emitted", {
-        length: markdown.length,
-      });
-    }
-    onChangeRef.current(markdown, "source");
-  }, []);
+  const handleSourceChange = useCallback(
+    (markdown: string) => {
+      if (editorDiagnostics.isEnabled()) {
+        editorDiagnostics.record("source-markdown-emitted", {
+          length: markdown.length,
+        });
+      }
+      updatePreviewStatus("checking");
+      onChangeRef.current(markdown, "source");
+    },
+    [updatePreviewStatus],
+  );
 
   useEffect(() => {
     valueRef.current = value;
@@ -155,6 +227,21 @@ export function MarkdownSurface({
     scheduleScrollSync();
   }, [view, value, scheduleScrollSync]);
 
+  useEffect(() => {
+    formattingRef.current = formatting;
+    const crepe = crepeRef.current;
+    const runtime = runtimeRef.current;
+    if (!editorReadyRef.current || !crepe || !runtime) return;
+    try {
+      runtime.setRichFormatting(crepe, formatting);
+      checkPreview(valueRef.current, crepe.getMarkdown());
+    } catch (error) {
+      console.error("Could not update Markdown formatting", error);
+      // oxlint-disable-next-line react/set-state-in-effect -- Report serializer configuration failures.
+      updatePreviewStatus("error");
+    }
+  }, [formatting, checkPreview, updatePreviewStatus]);
+
   useEffect(
     () => () => {
       if (scrollFrameRef.current !== null)
@@ -166,6 +253,9 @@ export function MarkdownSurface({
   useEffect(() => {
     if (!rootRef.current) return;
 
+    updatePreviewStatus("checking");
+    approvedDifferencesRef.current = new Map();
+    currentDifferencesRef.current = null;
     const root = rootRef.current;
     const recordInteraction = (event: Event) => {
       if (
@@ -201,7 +291,11 @@ export function MarkdownSurface({
     void import("./richEditorRuntime").then(async (runtime) => {
       if (disposed || !rootRef.current) return;
       runtimeRef.current = runtime;
-      crepe = runtime.createRichEditor(rootRef.current, valueRef.current);
+      crepe = runtime.createRichEditor(
+        rootRef.current,
+        valueRef.current,
+        formattingRef.current,
+      );
 
       crepe.on((listener) => {
         listener.selectionUpdated((ctx, selection) => {
@@ -230,6 +324,8 @@ export function MarkdownSurface({
             }
             return;
           }
+          if (!editorReadyRef.current || previewStatusRef.current !== "ready")
+            return;
           if (editorReadyRef.current && editorDiagnostics.isEnabled())
             editorDiagnostics.record("rich-markdown-emitted", {
               length: markdown.length,
@@ -238,8 +334,10 @@ export function MarkdownSurface({
               from: ctx.get(runtime.editorViewCtx).state.selection.from,
               to: ctx.get(runtime.editorViewCtx).state.selection.to,
             });
-          if (markdown !== valueRef.current)
+          if (markdown !== valueRef.current) {
+            approvedDifferencesRef.current = new Map();
             onChangeRef.current(markdown, "rich");
+          }
           if (editorReadyRef.current) scheduleScrollSync();
         });
       });
@@ -283,7 +381,12 @@ export function MarkdownSurface({
           "initialization",
         );
       }
+      checkPreview(latestValue, crepe.getMarkdown());
       scheduleScrollSync();
+    }).catch((error: unknown) => {
+      if (disposed) return;
+      console.error("Could not initialize the Markdown preview", error);
+      updatePreviewStatus("error");
     });
 
     return () => {
@@ -299,7 +402,7 @@ export function MarkdownSurface({
         void crepe.destroy();
       }
     };
-  }, [documentId, scheduleScrollSync]);
+  }, [checkPreview, documentId, scheduleScrollSync, updatePreviewStatus]);
 
   useEffect(() => {
     const crepe = crepeRef.current;
@@ -314,23 +417,30 @@ export function MarkdownSurface({
       return;
     }
 
+    // oxlint-disable-next-line react/set-state-in-effect -- Suspend preview while an external source change is checked.
+    updatePreviewStatus("checking");
     const timeoutId = window.setTimeout(() => {
       if (!editorReadyRef.current || crepeRef.current !== crepe) return;
-      if (!shouldReplaceRichDocument(origin, value, crepe.getMarkdown()))
-        return;
-
-      const expectedEcho = runtimeRef.current?.replaceRichMarkdown(
-        crepe,
-        value,
-        "shared-value-effect",
-      );
-      if (expectedEcho !== undefined)
-        expectedRichEchoRef.current = expectedEcho;
-      scheduleScrollSync();
+      try {
+        if (shouldReplaceRichDocument(origin, value, crepe.getMarkdown())) {
+          const expectedEcho = runtimeRef.current?.replaceRichMarkdown(
+            crepe,
+            value,
+            "shared-value-effect",
+          );
+          if (expectedEcho !== undefined)
+            expectedRichEchoRef.current = expectedEcho;
+        }
+        checkPreview(value, crepe.getMarkdown());
+        scheduleScrollSync();
+      } catch (error) {
+        console.error("Could not update the Markdown preview", error);
+        updatePreviewStatus("error");
+      }
     }, 50);
 
     return () => window.clearTimeout(timeoutId);
-  }, [value, origin, scheduleScrollSync]);
+  }, [checkPreview, value, origin, scheduleScrollSync, updatePreviewStatus]);
 
   return (
     <div className={`editor-surfaces editor-surfaces--${view}`}>
@@ -342,6 +452,17 @@ export function MarkdownSurface({
         <div className="pane-heading">
           <h2>Markdown</h2>
           <span className="pane-format">.MD</span>
+          {onFormattingSettings && (
+            <button
+              type="button"
+              className="icon-button pane-settings-button"
+              aria-label="Document formatting settings"
+              title="Document formatting settings"
+              onClick={onFormattingSettings}
+            >
+              <Settings2 size={15} />
+            </button>
+          )}
         </div>
         <CodeMirror
           value={value}
@@ -369,9 +490,47 @@ export function MarkdownSurface({
           <h2>Preview</h2>
           <span className="pane-format">LIVE</span>
         </div>
-        <div className="rich-editor-scroll">
+        <div
+          className={`rich-editor-scroll${previewStatus !== "ready" ? " preview-inactive" : ""}`}
+          inert={previewStatus !== "ready"}
+        >
           <div ref={rootRef} className="rich-editor-root" />
         </div>
+        {previewStatus !== "ready" && (
+          <div className="preview-placeholder" role="status">
+            {previewStatus === "checking" ? (
+              <p>Checking Markdown for preview changes...</p>
+            ) : previewStatus === "error" ? (
+              <p>
+                Unable to load or update the preview. Your Markdown remains
+                available in the source pane.
+              </p>
+            ) : (
+              <>
+                <h3>Preview may change this Markdown</h3>
+                <p>
+                  {previewStatus === "unverified"
+                    ? "The preview check could not complete. "
+                    : "The preview changes this Markdown when it is serialized. "}
+                  Loading it does not change the source, but edits or pastes in
+                  Preview can change or remove content anywhere in the document.
+                  Formatting differences can also trigger this warning.
+                </p>
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={() => {
+                    approvedDifferencesRef.current =
+                      currentDifferencesRef.current ?? new Map();
+                    updatePreviewStatus("ready");
+                  }}
+                >
+                  Load preview
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

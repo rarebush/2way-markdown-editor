@@ -25,7 +25,10 @@ import type {
   WorkspaceDocument,
 } from "./documents";
 import { documentRepository, inWorkspace } from "./documents";
-import { repositoryFiles as selectRepositoryFiles } from "./repositoryFiles";
+import {
+  repositoryFiles as selectRepositoryFiles,
+  workingCopyStatus,
+} from "./repositoryFiles";
 import {
   GitHubClient,
   GitHubError,
@@ -108,11 +111,15 @@ function RepositoryTree({
   activePath,
   disabled,
   onOpen,
+  cachedByPath,
+  remoteEntries,
 }: {
   files: GitHubTreeEntry[];
   activePath?: string;
   disabled: boolean;
   onOpen: (path: string) => void;
+  cachedByPath: Map<string, WorkspaceDocument>;
+  remoteEntries: Map<string, GitHubTreeEntry> | null;
 }) {
   const root: FileNode = { path: "", children: new Map() };
   for (const entry of files) {
@@ -140,15 +147,32 @@ function RepositoryTree({
             <li key={child.path}>
               {child.entry ? (
                 <button
-                  className={`github-row ${activePath === child.path ? "is-selected" : ""}`}
+                  className={`github-row github-row--repository ${activePath === child.path ? "is-selected" : ""}`}
                   type="button"
                   title={child.path}
+                  aria-label={name}
+                  aria-description={
+                    cachedByPath.get(child.path)
+                      ? workingCopyStatus(
+                          cachedByPath.get(child.path)!,
+                          remoteEntries,
+                        ).join("; ") || undefined
+                      : undefined
+                  }
                   aria-current={activePath === child.path ? "page" : undefined}
                   disabled={disabled}
                   onClick={() => onOpen(child.path)}
                 >
                   <FileText size={14} />
-                  <span>{name}</span>
+                  <span className="repository-file-content">
+                    <span>{name}</span>
+                    {cachedByPath.get(child.path) && (
+                      <WorkingCopyBadges
+                        document={cachedByPath.get(child.path)!}
+                        remoteEntries={remoteEntries}
+                      />
+                    )}
+                  </span>
                 </button>
               ) : (
                 <details open>
@@ -166,6 +190,25 @@ function RepositoryTree({
     );
   }
   return renderNodes(root);
+}
+
+function WorkingCopyBadges({
+  document,
+  remoteEntries,
+}: {
+  document: WorkspaceDocument;
+  remoteEntries: Map<string, GitHubTreeEntry> | null;
+}) {
+  const status = workingCopyStatus(document, remoteEntries);
+  return status.length ? (
+    <span className="working-copy-badges">
+      {status.map((item) => (
+        <span key={item} className="working-copy-badge">
+          {item}
+        </span>
+      ))}
+    </span>
+  ) : null;
 }
 
 export function GitHubWorkspace({
@@ -277,6 +320,13 @@ export function GitHubWorkspace({
     otherCachedFiles,
     directories,
   } = selectRepositoryFiles(entries, documents, target);
+  const remoteEntries = snapshot
+    ? new Map(
+        entries
+          .filter((entry) => entry.type === "blob")
+          .map((entry) => [entry.path, entry]),
+      )
+    : null;
   const selectedDirectory =
     moveDirectory === "__new_directory__" ? newDirectory.trim() : moveDirectory;
   const movePath = [selectedDirectory, moveFilename].filter(Boolean).join("/");
@@ -1119,6 +1169,8 @@ export function GitHubWorkspace({
             <>
               <RepositoryTree
                 files={repositoryFiles}
+                cachedByPath={cachedByPath}
+                remoteEntries={remoteEntries}
                 activePath={
                   inWorkspace(document, "repository", target)
                     ? (linked?.path ?? document.repositoryPath)
@@ -1127,6 +1179,12 @@ export function GitHubWorkspace({
                 disabled={busy}
                 onOpen={(path) => void openRepositoryFile(path)}
               />
+              {snapshot && (
+                <p className="repository-status-note">
+                  GitHub indicators use the last fetched listing. Refresh to
+                  check for newer changes.
+                </p>
+              )}
               {!repositoryFiles.length && !busy && (
                 <p className="github-target">No Markdown files</p>
               )}
@@ -1176,18 +1234,31 @@ export function GitHubWorkspace({
               {otherCachedFiles.map((item) => (
                 <li key={item.id}>
                   <button
-                    className={`github-row ${item.id === document.id ? "is-selected" : ""}`}
+                    className={`github-row github-row--repository ${item.id === document.id ? "is-selected" : ""}`}
                     type="button"
                     title={
                       item.github?.path ?? item.repositoryPath ?? item.name
+                    }
+                    aria-label={
+                      item.github?.path ?? item.repositoryPath ?? item.name
+                    }
+                    aria-description={
+                      workingCopyStatus(item, remoteEntries).join("; ") ||
+                      undefined
                     }
                     aria-current={item.id === document.id ? "page" : undefined}
                     disabled={busy || !onSelect}
                     onClick={() => onSelect?.(item.id)}
                   >
                     <FileText size={14} />
-                    <span>
-                      {item.github?.path ?? item.repositoryPath ?? item.name}
+                    <span className="repository-file-content">
+                      <span>
+                        {item.github?.path ?? item.repositoryPath ?? item.name}
+                      </span>
+                      <WorkingCopyBadges
+                        document={item}
+                        remoteEntries={remoteEntries}
+                      />
                     </span>
                   </button>
                 </li>

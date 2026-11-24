@@ -1048,6 +1048,72 @@ describe("GitHub workspace", () => {
     expect(onSelect).toHaveBeenLastCalledWith(local.id);
   });
 
+  it("flags cached local and remote discrepancies using the fetched branch listing", async () => {
+    const changed = {
+      ...local,
+      github: origin,
+    };
+    const missing = {
+      ...local,
+      id: "missing",
+      content: origin.baseContent,
+      github: { ...origin, path: "removed.md" },
+    };
+    const otherBranch = {
+      ...local,
+      id: "other-branch",
+      github: { ...origin, path: "other.md", branch: "docs/topic" },
+    };
+    vi.mocked(GitHubClient.prototype.markdownFiles).mockResolvedValue([
+      { path: "notes.md", type: "blob", mode: "100644", sha: "new-blob" },
+    ]);
+    const onSelect = vi.fn();
+    const onUpdate = vi.fn();
+    render(
+      <GitHubWorkspace
+        document={changed}
+        documents={[changed, missing, otherBranch]}
+        onSelect={onSelect}
+        onOpen={vi.fn()}
+        onUpdate={onUpdate}
+      />,
+    );
+    const user = await connect();
+    await user.click(screen.getByRole("button", { name: "writer/notes" }));
+    const row = await screen.findByRole("button", { name: "notes.md" });
+    expect(row.textContent).toContain("Local edits");
+    expect(row.textContent).toContain("GitHub differs from baseline");
+    expect(row.getAttribute("aria-description")).toContain("Local edits");
+    expect(screen.getByRole("button", { name: "removed.md" }).textContent).toContain(
+      "Not in GitHub listing",
+    );
+    expect(screen.queryByRole("button", { name: "other.md" })).toBeNull();
+    expect(screen.getByText(/last fetched listing/i)).toBeDefined();
+    expect(GitHubClient.prototype.open).not.toHaveBeenCalled();
+    expect(onUpdate).not.toHaveBeenCalled();
+    await user.click(row);
+    expect(onSelect).toHaveBeenCalledWith(changed.id);
+  });
+
+  it("keeps local edit indicators but does not claim remote changes offline", () => {
+    const cached = { ...local, github: origin };
+    render(
+      <GitHubWorkspace
+        workspace="repository"
+        selectedRepository={origin}
+        document={cached}
+        documents={[cached]}
+        onSelect={vi.fn()}
+        onOpen={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+    const row = screen.getByRole("button", { name: "notes.md" });
+    expect(row.textContent).toContain("Local edits");
+    expect(row.textContent).toContain("GitHub unchecked");
+    expect(row.textContent).not.toContain("Not in GitHub listing");
+  });
+
   it("switches branches as a whole tree and opens nested Markdown directly", async () => {
     const onOpen = vi.fn().mockResolvedValue(undefined);
     vi.mocked(GitHubClient.prototype.open).mockResolvedValue({

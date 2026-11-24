@@ -37,6 +37,14 @@ Local-to-repo moves are explicit, never name-based reconciliation. Whitespace an
 
 Only repository files already opened or created as working drafts are available offline. Cached working copies remain inside Repository after reload or disconnect; reconnect to list/open uncached files or switch the selected repository/branch.
 
+The repository file list labels working copies with local edits and those whose
+GitHub listing differs from their last checked baseline. It also labels
+unpublished drafts and working copies missing from the Markdown listing.
+GitHub indicators reflect the last fetched branch listing, not a live check;
+use **Refresh repository listing** to update them. While disconnected, GitHub
+status is unchecked. An indicator does not merge or publish changes, and
+**Commit changes** still checks the current GitHub version before publication.
+
 **Add file** and **Import Markdown** act on the selected workspace. In Local, they create new local files without overwriting existing drafts. In Repository, select a repository/branch first, then choose a repository-relative Markdown path in the creation/import dialog. Existing paths warn and block creation; drafts with the same title in Local are not matched or moved. The new repo-owned working file appears in the tree immediately and remains outside Local, including before publication. Use **Create on GitHub**, review the destination and Markdown diff, and explicitly confirm to publish. Adding/importing never commits automatically. Repository exports use the file's chosen repository filename.
 
 GitHub settings are limited to connection and repository selection. Every file-specific action starts beside the active file title; there is no "Linked file" section in settings. File comparison, path entry, diff review, and commit confirmation use a separate file-actions dialog.
@@ -73,12 +81,32 @@ The app checks the affected file revision and destination before writing and nev
 - Split view: edit Markdown and the formatted document side by side.
 - Rendered only: edit the formatted document directly.
 - The rich editor supports common Markdown and GFM constructs, including tables, task lists, strikethrough, links, quotations, and fenced code blocks.
+- In Preview, pressing the same bullet, numbered, task-list, or quote control again removes that formatting from the selected blocks. Nested list items move out one level at a time.
 - Moving the caret or typing in either pane reveals the corresponding block in the other pane. Switching views also reveals the last editing location. This synchronizes scrolling, not cursor positions or selections, and never moves focus. Lists, quotations, tables, and code fences scroll as whole blocks; a block already visible is left in place. Blank lines use the preceding block (or the first block at the start of a document).
 - Scroll synchronization supports LF, CRLF, and mixed line endings in local and repository files. Position calculations use CodeMirror's line-ending normalization without rewriting saved content.
 
 ## Markdown preservation
 
 The Markdown pane and rich editor currently synchronize by parsing and serializing the whole document. The rich editor can normalize supported syntax, and it may change or drop constructs it does not represent when you edit in the rendered pane. Exact source formatting and arbitrary Markdown extensions are not guaranteed to round-trip unchanged. Keep an exported `.md` backup before using the rich editor on documents with custom syntax.
+
+When the preview's Markdown round trip differs from the source, the preview is
+blocked until you select **Load preview**. This conservative check also warns
+about formatting-only changes and cannot guarantee that identical output is
+safe for every Markdown extension. Loading the preview does not itself change
+the source, but subsequent preview edits or pastes can rewrite the whole
+document. New source changes that introduce different round-trip changes require
+confirmation again. Editing source can also normalize line endings.
+
+The settings button beside the view controls sets browser-local defaults for
+horizontal rules, bullets, emphasis markers, and heading style. The Markdown
+pane's settings button can override those defaults for an individual local
+draft. These preferences affect Preview serialization; changing settings or
+editing in the Markdown pane does not automatically reformat the document.
+Use **Review formatting** in the document settings to inspect a diff and
+explicitly apply formatting to the whole working copy. This uses the same
+Preview serializer and can change or drop unsupported syntax. Overrides are
+stored with the draft in IndexedDB; global defaults are stored in browser
+local storage and do not follow the file to another browser or device.
 
 Before opening the tool up to a wider range of users, revisit this limitation:
 

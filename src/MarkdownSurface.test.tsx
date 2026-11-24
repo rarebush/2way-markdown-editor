@@ -18,6 +18,7 @@ vi.mock("./richEditorRuntime", () => ({
     },
   })),
   replaceRichMarkdown: vi.fn(),
+  setRichFormatting: vi.fn(),
   getScrollBlock: vi.fn(() => ({
     sourceFrom: 9,
     sourceTo: 15,

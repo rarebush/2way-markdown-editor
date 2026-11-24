@@ -1,4 +1,8 @@
 import { openDB } from "idb";
+import {
+  isFormattingPreferences,
+  type FormattingPreferences,
+} from "./formattingPreferences";
 
 export type GitHubOrigin = {
   repositoryId: number;
@@ -33,6 +37,7 @@ export type WorkspaceDocument = {
   githubPending?: GitHubPending;
   repository?: RepositoryWorkspace;
   repositoryPath?: string;
+  formatting?: FormattingPreferences;
 };
 
 export function documentRepository(
@@ -140,6 +145,9 @@ export async function listDocuments(): Promise<WorkspaceDocument[]> {
       ...(isGitHubOrigin(document.github) ? { github: document.github } : {}),
       ...(isGitHubPending(document.githubPending)
         ? { githubPending: document.githubPending }
+        : {}),
+      ...(isFormattingPreferences(document.formatting)
+        ? { formatting: document.formatting }
         : {}),
     }))
     .sort((first, second) => second.updatedAt - first.updatedAt);

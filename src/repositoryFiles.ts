@@ -5,6 +5,26 @@ import {
 } from "./documents";
 import type { GitHubTreeEntry } from "./githubClient";
 
+export function workingCopyStatus(
+  document: WorkspaceDocument,
+  remoteEntries: Map<string, GitHubTreeEntry> | null,
+): string[] {
+  const origin = document.github;
+  if (!origin) return ["Unpublished"];
+
+  const status: string[] = [];
+  if (document.content !== origin.baseContent) status.push("Local edits");
+  if (!remoteEntries) {
+    status.push("GitHub unchecked");
+  } else {
+    const remote = remoteEntries.get(origin.path);
+    if (!remote) status.push("Not in GitHub listing");
+    else if (remote.sha !== origin.blobSha || remote.mode !== origin.mode)
+      status.push("GitHub differs from baseline");
+  }
+  return status;
+}
+
 export function repositoryFiles(
   entries: GitHubTreeEntry[],
   documents: WorkspaceDocument[],

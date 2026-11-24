@@ -9,9 +9,18 @@ import {
   FilePlus2,
   FileText,
   Pencil,
+  Settings,
   Trash2,
 } from "lucide-react";
-import { MarkdownSurface } from "./MarkdownSurface";
+import { MarkdownSurface, type MarkdownSurfaceHandle } from "./MarkdownSurface";
+import { FormattingDialog } from "./FormattingDialog";
+import { handleDialogKeyDown } from "./dialogKeyboard";
+import { createTwoFilesPatch } from "diff";
+import {
+  defaultFormattingPreferences,
+  loadFormattingPreferences,
+  saveFormattingPreferences,
+} from "./formattingPreferences";
 import { GitHubWorkspace } from "./GitHubWorkspace";
 import { encodeMarkdown, validateMarkdownPath } from "./githubClient";
 import { repositoryFilename } from "./githubSync";
@@ -81,6 +90,29 @@ function App() {
     updateContent,
   } = useDocumentWorkspace(starterMarkdown);
   const [view, setView] = useState<ViewMode>("split");
+  const [globalFormatting, setGlobalFormatting] = useState(() => {
+    try {
+      return { value: loadFormattingPreferences(), error: "" };
+    } catch (error) {
+      console.error("Could not load formatting preferences", error);
+      return {
+        value: defaultFormattingPreferences,
+        error: "Could not load saved formatting preferences. Check browser storage and save them again.",
+      };
+    }
+  });
+  const [formattingDialog, setFormattingDialog] = useState<
+    "global" | "document" | null
+  >(null);
+  const [formatReview, setFormatReview] = useState<{
+    documentId: string;
+    original: string;
+    formatted: string;
+    diff: string;
+  } | null>(null);
+  const [formatReviewError, setFormatReviewError] = useState("");
+  const surfaceRef = useRef<MarkdownSurfaceHandle>(null);
+  const formattingTriggerRef = useRef<HTMLElement | null>(null);
   const [dialogMode, setDialogMode] = useState<DialogMode>(null);
   const [documentName, setDocumentName] = useState("");
   const [fileRepository, setFileRepository] =
@@ -99,6 +131,64 @@ function App() {
   }>({ repository: null, paths: [] });
 
   const activeId = activeDocument?.id ?? "";
+  const effectiveFormatting =
+    activeDocument?.formatting ?? globalFormatting.value;
+  function openFormattingDialog(scope: "global" | "document") {
+    formattingTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setFormattingDialog(scope);
+  }
+  function closeFormattingDialog() {
+    setFormattingDialog(null);
+    window.requestAnimationFrame(() => formattingTriggerRef.current?.focus());
+  }
+  function closeFormattingReview() {
+    setFormatReview(null);
+    window.requestAnimationFrame(() => formattingTriggerRef.current?.focus());
+  }
+  function prepareFormattingReview() {
+    if (!activeDocument || !surfaceRef.current)
+      throw new Error("Open a document before reviewing formatting.");
+    const original = activeDocument.content;
+    const formatted = surfaceRef.current.prepareFormatting(original);
+    setFormatReview({
+      documentId: activeDocument.id,
+      original,
+      formatted,
+      diff: createTwoFilesPatch(
+        "Current Markdown",
+        "Formatted Markdown",
+        original,
+        formatted,
+      ),
+    });
+    setFormatReviewError("");
+    setFormattingDialog(null);
+  }
+
+  function confirmFormatting() {
+    if (!formatReview || !activeDocument || !surfaceRef.current) return;
+    try {
+      if (
+        activeDocument.id !== formatReview.documentId ||
+        activeDocument.content !== formatReview.original ||
+        surfaceRef.current.prepareFormatting(formatReview.original) !==
+          formatReview.formatted
+      ) {
+        throw new Error(
+          "The document or preferences changed. Review formatting again.",
+        );
+      }
+      updateContent(formatReview.formatted, "source");
+      closeFormattingReview();
+    } catch (error) {
+      setFormatReviewError(
+        error instanceof Error ? error.message : "Could not apply formatting.",
+      );
+    }
+  }
   const newRepositoryPath = filePath ?? repositoryFilename(documentName);
   const pathCollision =
     fileRepository &&
@@ -273,36 +363,47 @@ function App() {
           </span>
         </a>
 
-        <div className="view-switcher" role="group" aria-label="Editor view">
+        <div className="header-view-controls">
+          <div className="view-switcher" role="group" aria-label="Editor view">
+            <button
+              className={`view-button ${view === "source" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setView("source")}
+              aria-label="Markdown only"
+              title="Markdown only"
+              aria-pressed={view === "source"}
+            >
+              <Code2 size={16} />
+            </button>
+            <button
+              className={`view-button ${view === "split" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setView("split")}
+              aria-label="Split view"
+              title="Split view"
+              aria-pressed={view === "split"}
+            >
+              <Columns2 size={16} />
+            </button>
+            <button
+              className={`view-button ${view === "rendered" ? "is-active" : ""}`}
+              type="button"
+              onClick={() => setView("rendered")}
+              aria-label="Rendered only"
+              title="Rendered only"
+              aria-pressed={view === "rendered"}
+            >
+              <Eye size={16} />
+            </button>
+          </div>
           <button
-            className={`view-button ${view === "source" ? "is-active" : ""}`}
             type="button"
-            onClick={() => setView("source")}
-            aria-label="Markdown only"
-            title="Markdown only"
-            aria-pressed={view === "source"}
+            className="icon-button global-settings-button"
+            aria-label="Formatting preferences"
+            title="Formatting preferences"
+            onClick={() => openFormattingDialog("global")}
           >
-            <Code2 size={16} />
-          </button>
-          <button
-            className={`view-button ${view === "split" ? "is-active" : ""}`}
-            type="button"
-            onClick={() => setView("split")}
-            aria-label="Split view"
-            title="Split view"
-            aria-pressed={view === "split"}
-          >
-            <Columns2 size={16} />
-          </button>
-          <button
-            className={`view-button ${view === "rendered" ? "is-active" : ""}`}
-            type="button"
-            onClick={() => setView("rendered")}
-            aria-label="Rendered only"
-            title="Rendered only"
-            aria-pressed={view === "rendered"}
-          >
-            <Eye size={16} />
+            <Settings size={18} />
           </button>
         </div>
       </header>
@@ -420,11 +521,14 @@ function App() {
             {activeDocument ? (
               <MarkdownSurface
                 key={activeDocument.id}
+                ref={surfaceRef}
                 documentId={activeDocument.id}
                 value={activeDocument.content}
                 origin={editOrigin}
                 onChange={updateContent}
                 view={view}
+                formatting={effectiveFormatting}
+                onFormattingSettings={() => openFormattingDialog("document")}
               />
             ) : (
               <section className="workspace-empty">
@@ -511,6 +615,93 @@ function App() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {formattingDialog && (
+        <FormattingDialog
+          key={`${formattingDialog}-${activeId}`}
+          scope={formattingDialog}
+          preferences={
+            formattingDialog === "global"
+              ? globalFormatting.value
+              : effectiveFormatting
+          }
+          globalPreferences={globalFormatting.value}
+          hasOverride={!!activeDocument?.formatting}
+          storageError={
+            formattingDialog === "global" ? globalFormatting.error : ""
+          }
+          onClose={closeFormattingDialog}
+          onSave={async (preferences) => {
+            if (activeDocument && surfaceRef.current)
+              surfaceRef.current.prepareFormatting(activeDocument.content);
+            if (formattingDialog === "global") {
+              if (!preferences)
+                throw new Error("Choose global formatting preferences.");
+              saveFormattingPreferences(preferences);
+              setGlobalFormatting({ value: preferences, error: "" });
+            } else {
+              if (!activeDocument)
+                throw new Error("The document is no longer available.");
+              await updateDocument(activeDocument.id, (document) => {
+                const { formatting: _previous, ...rest } = document;
+                return preferences ? { ...rest, formatting: preferences } : rest;
+              });
+            }
+          }}
+          onReview={formattingDialog === "document" ? prepareFormattingReview : undefined}
+        />
+      )}
+
+      {formatReview && (
+        <div className="dialog-backdrop" role="presentation">
+          <section
+            className="dialog formatting-review"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="format-review-title"
+            onKeyDown={(event) =>
+              handleDialogKeyDown(event, closeFormattingReview)
+            }
+          >
+            <h2 id="format-review-title">Review formatting</h2>
+            <p>
+              Applying this replaces the document with the Preview serializer’s
+              output. Unsupported Markdown may change or be lost. Review the
+              entire diff before applying.
+            </p>
+            {formatReview.original === formatReview.formatted ? (
+              <p>No formatting changes.</p>
+            ) : (
+              <pre
+                className="github-diff"
+                aria-label="Formatting changes"
+                tabIndex={0}
+              >
+                {formatReview.diff}
+              </pre>
+            )}
+            {formatReviewError && <p role="alert">{formatReviewError}</p>}
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="secondary-action"
+                autoFocus
+                onClick={closeFormattingReview}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary-action"
+                disabled={formatReview.original === formatReview.formatted}
+                onClick={confirmFormatting}
+              >
+                Apply formatting
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

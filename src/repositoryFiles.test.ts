@@ -3,7 +3,7 @@ import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import { inWorkspace, type WorkspaceDocument } from "./documents";
 import type { GitHubTreeEntry } from "./githubClient";
-import { repositoryFiles } from "./repositoryFiles";
+import { repositoryFiles, workingCopyStatus } from "./repositoryFiles";
 
 const target = {
   repositoryId: 1,
@@ -41,6 +41,25 @@ const entries: GitHubTreeEntry[] = [
 ];
 
 describe("repository file selection", () => {
+  it("distinguishes local and snapshot changes without fetching file contents", () => {
+    const same = new Map([
+      [published.github!.path, {
+        ...entries[0],
+        sha: published.github!.blobSha,
+      }],
+    ]);
+    const unchanged = { ...published, content: published.github!.baseContent };
+    expect(workingCopyStatus(unchanged, same)).toEqual([]);
+    expect(workingCopyStatus(published, same)).toEqual(["Local edits"]);
+    expect(workingCopyStatus(unchanged, new Map([[entries[0].path, entries[0]]])))
+      .toEqual(["GitHub differs from baseline"]);
+    expect(workingCopyStatus(unchanged, new Map())).toEqual(["Not in GitHub listing"]);
+    expect(workingCopyStatus(unchanged, null)).toEqual(["GitHub unchecked"]);
+    expect(workingCopyStatus(draft, same)).toEqual(["Unpublished"]);
+    same.set(published.github!.path, { ...same.get(published.github!.path)!, mode: "100755" });
+    expect(workingCopyStatus(unchanged, same)).toEqual(["GitHub differs from baseline"]);
+  });
+
   it("lists remote files and unpublished drafts without mixing workspaces", () => {
     const otherBranch = {
       ...draft,
